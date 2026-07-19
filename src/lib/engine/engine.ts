@@ -11,7 +11,7 @@ import { runSanitize } from './stages/sanitize';
 import { runCssFilter } from './stages/css-filter';
 import { runInline } from './stages/inline';
 import { runDefaults } from './stages/defaults';
-import { runQuirks } from './stages/quirks';
+import { runQuirks, applyOutputQuirks } from './stages/quirks';
 
 const STAGE_ORDER: Record<MutationStage, number> = {
   sanitize: 0,
@@ -82,14 +82,16 @@ export function simulate(html: string, clientId: ClientId): SimulationResult {
   ctx.sheets = sources.map((s) => parseStyleSheet(s, parsed.lineIndex));
   runCssFilter(ctx);
 
-  // 3. Phase-3 stubs (no-ops today).
-  runInline(ctx);
-  runDefaults(ctx);
-  runQuirks(ctx);
+  // 3. Phase-3 stages.
+  runInline(ctx); // stub
+  runDefaults(ctx); // inject the client's UA stylesheet
+  runQuirks(ctx); // @media / max-width quirks (AST-level)
 
-  // Derive the output HTML from the mutated AST.
+  // Derive the output HTML from the mutated AST, then apply output-level quirks
+  // (Gmail's 102 KB clipping operates on the final serialized bytes).
   writeBack(ctx.sheets);
-  const outHtml = serializeHtml(parsed);
+  let outHtml = serializeHtml(parsed);
+  outHtml = applyOutputQuirks(ctx, outHtml);
 
   ctx.mutations.sort(compareMutations);
   return { clientId, html: outHtml, mutations: ctx.mutations };

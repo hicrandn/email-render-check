@@ -82,6 +82,7 @@ If you use [Bun](https://bun.sh), the equivalent is `bun run update-caniemail`,
 - **Phase 1** — Can I Email data pipeline + snapshot schema tests. ✅
 - **Phase 2** — parse layer, sanitize + css-filter stages, deterministic engine,
   and the minimal UI. ✅
-- **Phase 3** (planned) — `defaults` (per-client UA stylesheet) and `quirks`
-  (Gmail 102KB clipping, Outlook width behavior, Yahoo media-query limits).
+- **Phase 3** — `defaults` (per-client UA stylesheet injection) and `quirks`
+  (Gmail 102KB clipping, Outlook @media strip + max-width ignore, Yahoo media-query
+  warnings). ✅
 - **Phase 4** (planned) — diff view, dark-mode simulation, calibration sends.

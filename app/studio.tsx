@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { simulate } from '@/src/lib/engine/engine';
 import { PROFILES } from '@/src/lib/engine/profiles';
@@ -67,6 +67,11 @@ export default function Studio() {
   const [active, setActive] = useState<ClientId>('gmail');
   const viewRef = useRef<CmView | null>(null);
 
+  // Draggable divider between the preview and the issues panel.
+  const splitRef = useRef<HTMLDivElement>(null);
+  const [previewPct, setPreviewPct] = useState(58);
+  const dragging = useRef(false);
+
   // 400ms debounce — the engine is pure TS, so analysis stays client-side.
   useEffect(() => {
     const t = setTimeout(() => setDebounced(source), 400);
@@ -95,6 +100,25 @@ export default function Studio() {
     const line = view.state.doc.line(lineNo);
     view.dispatch({ selection: { anchor: line.from, head: line.to }, scrollIntoView: true });
     view.focus();
+  }
+
+  function onDividerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    dragging.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onDividerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!dragging.current || !splitRef.current) return;
+    const rect = splitRef.current.getBoundingClientRect();
+    const pct = ((e.clientY - rect.top) / rect.height) * 100;
+    setPreviewPct(Math.min(85, Math.max(15, pct)));
+  }
+  function onDividerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    dragging.current = false;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // pointer already released
+    }
   }
 
   return (
@@ -161,14 +185,19 @@ export default function Studio() {
             })}
           </nav>
 
+          {/* Preview + issues split (draggable divider) */}
+          <div ref={splitRef} className="flex min-h-0 flex-1 flex-col">
           {/* Preview device */}
-          <div className="flex min-h-0 flex-3 items-start justify-center overflow-auto bg-zinc-200/60 p-5 dark:bg-black/40">
+          <div
+            style={{ height: `${previewPct}%` }}
+            className="flex min-h-0 shrink-0 items-start justify-center overflow-auto bg-zinc-200/60 p-5 dark:bg-black/40"
+          >
             <div className="flex h-full w-full max-w-[680px] flex-col overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 dark:ring-white/10">
               <div className="flex shrink-0 items-center gap-1.5 border-b border-zinc-100 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-800/60">
                 <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
                 <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
                 <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
-                <span className="ml-2 truncate text-[11px] text-zinc-500">
+                <span className="ml-2 truncate text-[11px] text-zinc-100">
                   {PROFILES[active].name} · {PROFILES[active].engine}
                 </span>
               </div>
@@ -181,8 +210,18 @@ export default function Studio() {
             </div>
           </div>
 
+          {/* Draggable divider */}
+          <div
+            onPointerDown={onDividerDown}
+            onPointerMove={onDividerMove}
+            onPointerUp={onDividerUp}
+            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-zinc-200 bg-zinc-100 hover:bg-sky-100 dark:border-zinc-800 dark:bg-zinc-800 dark:hover:bg-sky-950"
+          >
+            <span className="h-0.5 w-8 rounded-full bg-zinc-300 group-hover:bg-sky-400 dark:bg-zinc-600" />
+          </div>
+
           {/* Issues panel */}
-          <div className="flex min-h-0 flex-2 flex-col border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex min-h-0 flex-1 flex-col border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex shrink-0 items-center gap-3 border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
                 Incompatibilities
@@ -259,6 +298,7 @@ export default function Studio() {
                 </li>
               )}
             </ul>
+          </div>
           </div>
         </section>
       </div>

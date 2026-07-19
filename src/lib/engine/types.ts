@@ -74,6 +74,17 @@ export interface SimulationResult {
   mutations: Mutation[];
 }
 
+export interface ClientQuirks {
+  /** Message is clipped past this size (Gmail = 102 KB). */
+  maxSizeKB?: number;
+  /** Rendering engine ignores @media entirely (Outlook/Word). */
+  ignoresMediaQueries?: boolean;
+  /** Partial / unreliable @media support (warn, keep). */
+  partialMediaQueries?: boolean;
+  /** max-width is ignored on non-table elements (Outlook/Word). */
+  ignoresMaxWidth?: boolean;
+}
+
 export interface ClientProfile {
   id: ClientId;
   /** Human-readable client name (used in mutation reasons). */
@@ -82,6 +93,13 @@ export interface ClientProfile {
   engine: string;
   /** Link to vendor rendering documentation, used as fallback evidence. */
   vendorDocs: string;
+  /**
+   * The client's user-agent stylesheet, injected at the top of <head> as a
+   * low-priority default so author inline/existing styles override it.
+   */
+  uaStylesheet: string;
+  /** Per-client rendering quirks handled by the quirks stage. */
+  quirks: ClientQuirks;
 }
 
 // ---------------------------------------------------------------------------

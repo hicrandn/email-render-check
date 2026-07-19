@@ -5,4 +5,6 @@ export const appleMail: ClientProfile = {
   name: 'Apple Mail (macOS)',
   engine: 'WebKit',
   vendorDocs: 'https://www.caniemail.com/',
+  uaStylesheet: "body{font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;}",
+  quirks: {},
 };

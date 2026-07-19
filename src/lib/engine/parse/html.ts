@@ -1,6 +1,6 @@
 // HTML parsing via parse5, with full source-location info retained.
 // No DOM / window usage — operates purely on strings and the parse5 AST.
-import { parse, serialize, defaultTreeAdapter } from 'parse5';
+import { parse, parseFragment, serialize, defaultTreeAdapter } from 'parse5';
 import type { DefaultTreeAdapterMap } from 'parse5';
 import type { SourceLocation } from '../types';
 import { LineIndex } from './position';
@@ -50,6 +50,29 @@ export function walkElements(
 
 export function getAttr(el: Element, name: string): Attribute | undefined {
   return el.attrs.find((a) => a.name === name);
+}
+
+/** First matching element in document order, or undefined. */
+export function findElement(root: ParentNode, tagName: string): Element | undefined {
+  let found: Element | undefined;
+  walkElements(root, (el) => {
+    if (!found && el.tagName === tagName) found = el;
+  });
+  return found;
+}
+
+/** Build a `<style>` element node (with a text child) from raw CSS. */
+export function buildStyleNode(css: string, attrs: Attribute[] = []): Element {
+  const frag = parseFragment(`<style>${css}</style>`);
+  const style = frag.childNodes[0] as Element;
+  style.attrs.push(...attrs);
+  return style;
+}
+
+/** Insert a node as the first child of a parent, wiring up parentNode. */
+export function prependChild(parent: ParentNode, node: ChildNode): void {
+  (node as ChildNode).parentNode = parent;
+  parent.childNodes.unshift(node);
 }
 
 /** Convert a parse5 location to our SourceLocation shape. */
