@@ -6,12 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "update-caniemail": "tsx scripts/update-caniemail.ts"
   },
   "dependencies": {
+    "@codemirror/lang-html": "^6.4.11",
+    "@uiw/react-codemirror": "^4.25.11",
     "next": "16.2.10",
+    "parse5": "^8.0.1",
+    "postcss": "^8.5.20",
+    "postcss-safe-parser": "^7.0.1",
+    "postcss-value-parser": "^4.2.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -21,6 +31,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
