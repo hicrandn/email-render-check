@@ -44,8 +44,6 @@ export function walkElements(
     if (isElement(child)) {
       visit(child, root);
       walkElements(child, visit);
-    } else if ('childNodes' in child && child.childNodes) {
-      walkElements(child as ParentNode, visit);
     }
   }
 }

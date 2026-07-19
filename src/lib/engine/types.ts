@@ -74,6 +74,16 @@ export interface SimulationResult {
   mutations: Mutation[];
 }
 
+export interface ClientProfile {
+  id: ClientId;
+  /** Human-readable client name (used in mutation reasons). */
+  name: string;
+  /** The rendering engine, which explains the "why" behind many quirks. */
+  engine: string;
+  /** Link to vendor rendering documentation, used as fallback evidence. */
+  vendorDocs: string;
+}
+
 // ---------------------------------------------------------------------------
 // Snapshot (caniemail.json) shape — produced by scripts/update-caniemail.ts.
 // ---------------------------------------------------------------------------
