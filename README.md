@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Email Renderer
 
-## Getting Started
+A preview tool that simulates how a user's email HTML renders across the major
+email clients (Gmail, Outlook Windows/Word engine, Outlook.com, Apple Mail,
+Yahoo) and explains, for every incompatibility, **which client, which feature,
+and why it is unsupported**.
 
-First, run the development server:
+## Architecture
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+The simulation engine produces exactly **one** output: a structured **Mutation
+Log**. The preview HTML, the warnings panel, and (later) the diff view are all
+derived from this log — they are never produced separately. The engine is pure
+TypeScript with no dependency on Next.js or the DOM, so it can also run in a
+CLI/CI context.
+
+```
+simulate(html, clientId) ──► { html, mutations: Mutation[] }
+
+pipeline:  parse ─► sanitize ─► css-filter ─► (inline · defaults · quirks stubs)
+                       │            │
+                       │            └─ match every declaration against the
+                       │               client's caniemail support status
+                       └─ unwrap / remove unsupported HTML elements
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Everything flows through ASTs — parse5 for HTML, postcss for CSS. There are **no
+global/stateful regexes**; the same input always yields a byte-identical result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Layout
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/lib/engine/
+  types.ts              Mutation / ClientProfile / snapshot types
+  data/
+    caniemail.json      committed, versioned support snapshot (never fetched at runtime)
+    snapshot.ts         typed accessor + featureBySlug index
+    slug-map.ts         caniemail slug -> property / value / function / unit matchers
+  parse/
+    html.ts             parse5 AST + source locations + style-source collection
+    css.ts              postcss declarations w/ absolute locations + shorthand expansion
+    position.ts         offset <-> line/col
+  profiles/             per-client metadata (gmail, outlook-win, outlook-com, apple-mail, yahoo)
+  stages/
+    sanitize.ts         element unwrap/remove + universal security strip
+    css-filter.ts       declaration support matching -> remove/warn
+    inline.ts defaults.ts quirks.ts   Phase-3 stubs
+  engine.ts             simulate(): runs the pipeline, derives output HTML
+app/                    minimal UI (CodeMirror editor + client-tabbed preview)
+scripts/update-caniemail.ts    snapshot generator
+tests/                  vitest fixtures + engine tests
+```
 
-## Learn More
+### The Mutation Log
 
-To learn more about Next.js, take a look at the following resources:
+Each `Mutation` records the `client`, `stage`, `action` (remove-property,
+remove-value, unwrap-element, remove-element, warn-only, …), the `target`
+(source location, selector, element, property, value), the `feature` (caniemail
+slug or quirk id), `severity`, a human-readable `reason`, a **mandatory**
+`evidence` link, and an optional `fix`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Commands
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run dev              # start the dev UI at http://localhost:3000
+npm run build            # production build
+npm test                 # run the vitest suite
+npm run test:watch       # watch mode
+npm run update-caniemail # regenerate src/lib/engine/data/caniemail.json
+npm run lint             # eslint
+```
 
-## Deploy on Vercel
+> `update-caniemail` fetches `https://www.caniemail.com/api/data.json`, resolves
+> the latest-version support status for each of the 5 target clients, and writes
+> the committed snapshot. It reports any fallback or unresolved client mappings.
+> The app itself **never** fetches caniemail at runtime.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+If you use [Bun](https://bun.sh), the equivalent is `bun run update-caniemail`,
+`bun test`, etc.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Status
+
+- **Phase 1** — Can I Email data pipeline + snapshot schema tests. ✅
+- **Phase 2** — parse layer, sanitize + css-filter stages, deterministic engine,
+  and the minimal UI. ✅
+- **Phase 3** (planned) — `defaults` (per-client UA stylesheet) and `quirks`
+  (Gmail 102KB clipping, Outlook width behavior, Yahoo media-query limits).
+- **Phase 4** (planned) — diff view, dark-mode simulation, calibration sends.
