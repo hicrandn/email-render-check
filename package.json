@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@codemirror/lang-html": "^6.4.11",
+    "@hugeicons/core-free-icons": "^4.2.2",
+    "@hugeicons/react": "^1.1.9",
     "@uiw/react-codemirror": "^4.25.11",
     "next": "16.2.10",
     "parse5": "^8.0.1",

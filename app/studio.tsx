@@ -1,10 +1,19 @@
 'use client';
 
-import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { simulate } from '@/src/lib/engine/engine';
 import { PROFILES } from '@/src/lib/engine/profiles';
-import { CLIENT_IDS, type ClientId, type Mutation, type SimulationResult } from '@/src/lib/engine/types';
+import {
+  CLIENT_IDS,
+  type ClientId,
+  type Mutation,
+  type MutationStage,
+  type RenderContext,
+  type SimulationResult,
+} from '@/src/lib/engine/types';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { ComputerIcon, Moon02Icon, SmartPhone01Icon, Sun03Icon } from '@hugeicons/core-free-icons';
 import type { CmView } from './editor';
 
 // CodeMirror touches the DOM — load it client-side only.
@@ -61,11 +70,120 @@ function shortName(id: ClientId): string {
   return PROFILES[id].name.split(' (')[0];
 }
 
+type PreviewScheme = 'light' | 'dark';
+type Device = 'desktop' | 'mobile';
+
+// Visual card width (desktop column vs. a common phone) and the matching
+// engine viewport width passed into the RenderContext.
+const DEVICE_WIDTH: Record<Device, number> = { desktop: 680, mobile: 390 };
+const DEVICE_VIEWPORT: Record<Device, number> = { desktop: 600, mobile: 375 };
+
+// Issues are grouped by pipeline stage so dark-mode findings read distinctly
+// from feature-strip / sanitize ones.
+const STAGE_ORDER: MutationStage[] = ['sanitize', 'css-filter', 'inline', 'defaults', 'dark-mode', 'quirk'];
+const STAGE_LABELS: Record<MutationStage, string> = {
+  sanitize: 'Sanitized',
+  'css-filter': 'Unsupported CSS',
+  inline: 'Inlined',
+  defaults: 'Client defaults',
+  'dark-mode': 'Dark mode',
+  quirk: 'Rendering quirks',
+};
+
+// A compact icon segmented control for the preview device + scheme pickers.
+function Segmented<T extends string>({
+  value,
+  options,
+  onPick,
+}: {
+  value: T;
+  options: { id: T; label: string; icon: ReactNode }[];
+  onPick: (v: T) => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5 rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          title={o.label}
+          aria-label={o.label}
+          aria-pressed={value === o.id}
+          onClick={() => onPick(o.id)}
+          className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+            value === o.id
+              ? 'bg-[var(--panel)] text-[var(--fg)] shadow-sm ring-1 ring-[var(--border)]'
+              : 'text-[var(--fg-muted)] hover:text-[var(--fg)]'
+          }`}
+        >
+          {o.icon}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function IssueRow({ m, onSelect }: { m: Mutation; onSelect: () => void }) {
+  const sev = SEVERITY[m.severity];
+  return (
+    <li>
+      <button
+        onClick={onSelect}
+        className="group block w-full px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.03]"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset ${sev.badge}`}>
+            {sev.label}
+          </span>
+          <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-[var(--fg-muted)] dark:bg-white/10">
+            {m.action}
+          </code>
+          {m.target.property && (
+            <code className="font-mono text-[11px] text-[var(--fg-muted)]">
+              {m.target.property}
+              {m.target.value ? `: ${m.target.value}` : ''}
+            </code>
+          )}
+          {m.target.element && !m.target.property && (
+            <code className="font-mono text-[11px] text-[var(--fg-muted)]">&lt;{m.target.element}&gt;</code>
+          )}
+          {m.target.loc && (
+            <span className="ml-auto font-mono text-[10px] text-[var(--fg-muted)] group-hover:text-sky-500">
+              L{m.target.loc.startLine}:{m.target.loc.startCol}
+            </span>
+          )}
+        </div>
+        <p className="mt-1.5 text-xs leading-relaxed text-[var(--fg)]/80">{m.reason}</p>
+        {m.fix && (
+          <p className="mt-1 text-[11px] leading-relaxed text-[var(--fg-muted)]">
+            <span className="font-semibold">Fix:</span> {m.fix}
+          </p>
+        )}
+        <a
+          href={m.evidence}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="mt-1 inline-block text-[11px] font-medium text-sky-600 hover:underline dark:text-sky-400"
+        >
+          {m.feature} ↗
+        </a>
+      </button>
+    </li>
+  );
+}
+
 export default function Studio() {
   const [source, setSource] = useState(SAMPLE);
   const [debounced, setDebounced] = useState(SAMPLE);
   const [active, setActive] = useState<ClientId>('gmail');
   const viewRef = useRef<CmView | null>(null);
+
+  // How the EMAIL is previewed (independent of the studio's own theme): the
+  // device width it's viewed at, and whether it's shown on a light or dark
+  // screen — because the same email is opened on phones and dark clients.
+  const [device, setDevice] = useState<Device>('desktop');
+  const [previewScheme, setPreviewScheme] = useState<PreviewScheme>('light');
 
   // Draggable divider between the preview and the issues panel.
   const splitRef = useRef<HTMLDivElement>(null);
@@ -78,12 +196,19 @@ export default function Studio() {
     return () => clearTimeout(t);
   }, [source]);
 
-  // Analyze every client once per (debounced) input; tab switches are instant.
+  // The conditions being simulated. The engine (not a CSS hack) produces the
+  // dark output per client, so previewScheme/device feed straight into it.
+  const renderCtx = useMemo<RenderContext>(
+    () => ({ colorScheme: previewScheme, imagesBlocked: false, viewportWidth: DEVICE_VIEWPORT[device] }),
+    [previewScheme, device],
+  );
+
+  // Analyze every client once per (debounced input × context); tab switches are instant.
   const results = useMemo(() => {
     const out = {} as Record<ClientId, SimulationResult>;
-    for (const id of CLIENT_IDS) out[id] = simulate(debounced, id);
+    for (const id of CLIENT_IDS) out[id] = simulate(debounced, id, renderCtx);
     return out;
-  }, [debounced]);
+  }, [debounced, renderCtx]);
 
   const result = results[active];
   const counts = useMemo(() => {
@@ -91,6 +216,20 @@ export default function Studio() {
     for (const m of result.mutations) c[m.severity]++;
     return c;
   }, [result]);
+
+  // Group the active client's mutations by pipeline stage, in pipeline order.
+  const groups = useMemo(() => {
+    const byStage = new Map<MutationStage, Mutation[]>();
+    for (const m of result.mutations) {
+      const list = byStage.get(m.stage);
+      if (list) list.push(m);
+      else byStage.set(m.stage, [m]);
+    }
+    return STAGE_ORDER.filter((s) => byStage.has(s)).map((s) => ({ stage: s, items: byStage.get(s)! }));
+  }, [result]);
+
+  // Outlook/Win never switches to dark — surface that instead of a fake preview.
+  const alwaysLight = previewScheme === 'dark' && PROFILES[active].darkMode.strategy === 'unsupported';
 
   function scrollToLoc(mutation: Mutation) {
     const view = viewRef.current;
@@ -122,36 +261,46 @@ export default function Studio() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--canvas)] text-[var(--fg)]">
       {/* Top bar */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-zinc-200 bg-white px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+      <header className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel)] px-4 py-2.5">
         <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-xs font-bold text-white dark:bg-white dark:text-zinc-900">
           ✉
         </div>
         <h1 className="text-sm font-semibold tracking-tight">Email Renderer</h1>
-        <span className="hidden text-xs text-zinc-500 sm:inline">
+        <span className="hidden text-xs text-[var(--fg-muted)] sm:inline">
           See how each client mangles your HTML — and why.
         </span>
       </header>
 
+      {/* Pane-title strip — reads as one filename row across both panes. */}
+      <div className="flex shrink-0 items-stretch border-b border-[var(--border)] bg-[var(--panel-2)] text-[11px] text-[var(--fg-muted)]">
+        <div className="relative flex w-[46%] min-w-0 items-center justify-center border-r border-[var(--border)] px-3 py-2">
+          <span className="font-mono">source.html</span>
+          <span className="absolute right-3 font-mono tabular-nums text-[var(--fg-muted)]/70">
+            {source.split('\n').length} lines
+          </span>
+        </div>
+        <div className="flex flex-1 min-w-0 items-center justify-center px-3 py-2">
+          <span className="truncate font-mono">
+            {shortName(active)} · {PROFILES[active].engine}
+          </span>
+        </div>
+      </div>
+
       <div className="flex min-h-0 flex-1">
         {/* ---- Editor pane ---- */}
-        <section className="flex w-[46%] min-w-0 min-h-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-3 py-1.5 dark:border-zinc-800">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-              HTML source
-            </span>
-            <span className="text-[11px] text-zinc-400">{source.split('\n').length} lines</span>
-          </div>
+        <section className="flex w-[46%] min-w-0 min-h-0 flex-col border-r border-[var(--border)] bg-[var(--panel)]">
           <div className="min-h-0 flex-1 overflow-hidden">
-            <Editor value={source} onChange={setSource} onView={(v) => (viewRef.current = v)} />
+            <Editor value={source} onChange={setSource} onView={(v) => (viewRef.current = v)} theme="light" />
           </div>
         </section>
 
         {/* ---- Preview + issues pane ---- */}
         <section className="flex min-h-0 flex-1 min-w-0 flex-col">
-          {/* Client tabs */}
-          <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-zinc-200 bg-white px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
+          {/* Client tabs + preview view controls (device / light-dark) */}
+          <nav className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--panel)] px-2 py-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {CLIENT_IDS.map((id) => {
               const res = results[id];
               const errs = res.mutations.filter((m) => m.severity === 'error').length;
@@ -163,7 +312,7 @@ export default function Studio() {
                   className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     isActive
                       ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-                      : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                      : 'text-[var(--fg-muted)] hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
                   {shortName(id)}
@@ -183,6 +332,31 @@ export default function Studio() {
                 </button>
               );
             })}
+            </div>
+
+            {alwaysLight && (
+              <span className="shrink-0 rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-medium text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-300">
+                {shortName(active)} always light
+              </span>
+            )}
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Segmented
+                value={device}
+                onPick={setDevice}
+                options={[
+                  { id: 'desktop', label: 'Desktop width', icon: <HugeiconsIcon icon={ComputerIcon} size={12}  /> },
+                  { id: 'mobile', label: 'Mobile width', icon: <HugeiconsIcon icon={SmartPhone01Icon} size={12}  /> },
+                ]}
+              />
+              <Segmented
+                value={previewScheme}
+                onPick={setPreviewScheme}
+                options={[
+                  { id: 'light', label: 'Light screen', icon: <HugeiconsIcon icon={Sun03Icon} size={12}  /> },
+                  { id: 'dark', label: 'Dark screen', icon: <HugeiconsIcon icon={Moon02Icon} size={12}  /> },
+                ]}
+              />
+            </div>
           </nav>
 
           {/* Preview + issues split (draggable divider) */}
@@ -190,21 +364,24 @@ export default function Studio() {
           {/* Preview device */}
           <div
             style={{ height: `${previewPct}%` }}
-            className="flex min-h-0 shrink-0 items-start justify-center overflow-auto bg-zinc-200/60 p-5 dark:bg-black/40"
+            className={`flex min-h-0 shrink-0 flex-col overflow-auto p-4 transition-colors ${
+              previewScheme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-[var(--preview-bg)]'
+            }`}
           >
-            <div className="flex h-full w-full max-w-[680px] flex-col overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 dark:ring-white/10">
+            <div
+              style={{ maxWidth: DEVICE_WIDTH[device] }}
+              className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-black/5 transition-[max-width] duration-200 dark:ring-white/10"
+            >
               <div className="flex shrink-0 items-center gap-1.5 border-b border-zinc-100 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-800/60">
                 <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
                 <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
                 <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
-                <span className="ml-2 truncate text-[11px] text-zinc-100">
-                  {PROFILES[active].name} · {PROFILES[active].engine}
-                </span>
               </div>
               <iframe
                 title={`${active} preview`}
                 sandbox=""
                 srcDoc={result.html}
+                style={{ colorScheme: previewScheme }}
                 className="min-h-0 w-full flex-1 border-0 bg-white"
               />
             </div>
@@ -215,18 +392,18 @@ export default function Studio() {
             onPointerDown={onDividerDown}
             onPointerMove={onDividerMove}
             onPointerUp={onDividerUp}
-            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-zinc-200 bg-zinc-100 hover:bg-sky-100 dark:border-zinc-800 dark:bg-zinc-800 dark:hover:bg-sky-950"
+            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-[var(--border)] bg-[var(--panel-2)] hover:bg-sky-500/10"
           >
-            <span className="h-0.5 w-8 rounded-full bg-zinc-300 group-hover:bg-sky-400 dark:bg-zinc-600" />
+            <span className="h-0.5 w-8 rounded-full bg-[var(--border)] group-hover:bg-sky-400" />
           </div>
 
           {/* Issues panel */}
-          <div className="flex min-h-0 flex-1 flex-col border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex shrink-0 items-center gap-3 border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+          <div className="flex min-h-0 flex-1 flex-col border-t border-[var(--border)] bg-[var(--panel)]">
+            <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border-soft)] px-3 py-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">
                 Incompatibilities
               </span>
-              <div className="flex items-center gap-3 text-[11px] text-zinc-500">
+              <div className="flex items-center gap-3 text-[11px] text-[var(--fg-muted)]">
                 {counts.error > 0 && (
                   <span className="flex items-center gap-1">
                     <span className="h-2 w-2 rounded-full bg-red-500" />
@@ -242,62 +419,33 @@ export default function Studio() {
               </div>
             </div>
 
-            <ul className="min-h-0 flex-1 divide-y divide-zinc-100 overflow-auto dark:divide-zinc-800">
-              {result.mutations.map((m, i) => {
-                const sev = SEVERITY[m.severity];
-                return (
-                  <li key={i}>
-                    <button
-                      onClick={() => scrollToLoc(m)}
-                      className="group block w-full px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset ${sev.badge}`}>
-                          {sev.label}
-                        </span>
-                        <code className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                          {m.action}
-                        </code>
-                        {m.target.property && (
-                          <code className="font-mono text-[11px] text-zinc-500">
-                            {m.target.property}
-                            {m.target.value ? `: ${m.target.value}` : ''}
-                          </code>
-                        )}
-                        {m.target.element && !m.target.property && (
-                          <code className="font-mono text-[11px] text-zinc-500">&lt;{m.target.element}&gt;</code>
-                        )}
-                        {m.target.loc && (
-                          <span className="ml-auto font-mono text-[10px] text-zinc-400 group-hover:text-sky-500">
-                            L{m.target.loc.startLine}:{m.target.loc.startCol}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
-                        {m.reason}
-                      </p>
-                      <a
-                        href={m.evidence}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-1 inline-block text-[11px] font-medium text-sky-600 hover:underline dark:text-sky-400"
-                      >
-                        {m.feature} ↗
-                      </a>
-                    </button>
-                  </li>
-                );
-              })}
+            <div className="min-h-0 flex-1 overflow-auto">
+              {groups.map((g) => (
+                <section key={g.stage}>
+                  <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--border-soft)] bg-[var(--panel-2)] px-3 py-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">
+                      {STAGE_LABELS[g.stage]}
+                    </span>
+                    <span className="rounded-full bg-black/5 px-1.5 text-[10px] font-semibold text-[var(--fg-muted)] dark:bg-white/10">
+                      {g.items.length}
+                    </span>
+                  </div>
+                  <ul className="divide-y divide-[var(--border-soft)]">
+                    {g.items.map((m, i) => (
+                      <IssueRow key={i} m={m} onSelect={() => scrollToLoc(m)} />
+                    ))}
+                  </ul>
+                </section>
+              ))}
               {result.mutations.length === 0 && (
-                <li className="flex flex-col items-center justify-center gap-1 px-3 py-10 text-center">
+                <div className="flex flex-col items-center justify-center gap-1 px-3 py-10 text-center">
                   <span className="text-2xl">🎉</span>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-[var(--fg-muted)]">
                     No incompatibilities for {shortName(active)}.
                   </p>
-                </li>
+                </div>
               )}
-            </ul>
+            </div>
           </div>
           </div>
         </section>
