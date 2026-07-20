@@ -2,7 +2,14 @@
 // pipeline and produces a single Mutation Log; the output HTML is derived by
 // serializing the mutated AST. No DOM, no window, no global/stateful regex —
 // everything flows through the parse5 + postcss ASTs.
-import type { ClientId, Mutation, MutationStage, SimulationResult } from './types';
+import {
+  DEFAULT_CONTEXT,
+  type ClientId,
+  type Mutation,
+  type MutationStage,
+  type RenderContext,
+  type SimulationResult,
+} from './types';
 import { parseHtml, serializeHtml, collectStyleSources, getAttr } from './parse/html';
 import { parseStyleSheet, type StyleSheet } from './parse/css';
 import { getProfile } from './profiles';
@@ -11,6 +18,7 @@ import { runSanitize } from './stages/sanitize';
 import { runCssFilter } from './stages/css-filter';
 import { runInline } from './stages/inline';
 import { runDefaults } from './stages/defaults';
+import { runDarkMode } from './stages/dark-mode';
 import { runQuirks, applyOutputQuirks } from './stages/quirks';
 
 const STAGE_ORDER: Record<MutationStage, number> = {
@@ -18,7 +26,8 @@ const STAGE_ORDER: Record<MutationStage, number> = {
   'css-filter': 1,
   inline: 2,
   defaults: 3,
-  quirk: 4,
+  'dark-mode': 4,
+  quirk: 5,
 };
 
 /** Stable ordering so identical input always yields a byte-identical result. */
@@ -64,12 +73,17 @@ function writeBack(sheets: StyleSheet[]): void {
   }
 }
 
-export function simulate(html: string, clientId: ClientId): SimulationResult {
+export function simulate(
+  html: string,
+  clientId: ClientId,
+  context: RenderContext = DEFAULT_CONTEXT,
+): SimulationResult {
   const parsed = parseHtml(html);
   const ctx: StageContext = {
     clientId,
     profile: getProfile(clientId),
     parsed,
+    render: context,
     sheets: [],
     mutations: [],
   };
@@ -85,6 +99,7 @@ export function simulate(html: string, clientId: ClientId): SimulationResult {
   // 3. Phase-3 stages.
   runInline(ctx); // stub
   runDefaults(ctx); // inject the client's UA stylesheet
+  runDarkMode(ctx); // dark-mode simulation (no-op unless context is dark)
   runQuirks(ctx); // @media / max-width quirks (AST-level)
 
   // Derive the output HTML from the mutated AST, then apply output-level quirks

@@ -9,4 +9,14 @@ export const yahoo: ClientProfile = {
   quirks: {
     partialMediaQueries: true,
   },
+  darkMode: {
+    strategy: 'auto-invert',
+    respectsColorSchemeMeta: false,
+    respectsPrefersColorScheme: false, // limited/unreliable
+    invertsUndeclaredColors: true,
+    supportsOgscHack: false,
+    note:
+      'Yahoo! Mail auto-inverts undeclared colors and has limited, unreliable ' +
+      '@media (prefers-color-scheme: dark) support, so author dark styles may not apply.',
+  },
 };

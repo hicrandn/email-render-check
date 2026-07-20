@@ -14,5 +14,17 @@ export const outlookWin: ClientProfile = {
   quirks: {
     ignoresMediaQueries: true,
     ignoresMaxWidth: true,
+    unreliablePercentWidth: true,
+    unreliableBlockMargin: true,
+  },
+  darkMode: {
+    strategy: 'unsupported',
+    respectsColorSchemeMeta: false,
+    respectsPrefersColorScheme: false,
+    invertsUndeclaredColors: false,
+    supportsOgscHack: false,
+    note:
+      'Outlook on Windows (Word engine) always renders the light design ' +
+      'regardless of the OS dark-mode setting.',
   },
 };

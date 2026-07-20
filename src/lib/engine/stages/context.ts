@@ -1,4 +1,4 @@
-import type { ClientId, ClientProfile, Mutation } from '../types';
+import type { ClientId, ClientProfile, Mutation, RenderContext } from '../types';
 import type { ParsedHtml } from '../parse/html';
 import type { StyleSheet } from '../parse/css';
 
@@ -7,6 +7,8 @@ export interface StageContext {
   clientId: ClientId;
   profile: ClientProfile;
   parsed: ParsedHtml;
+  /** The conditions being simulated (color scheme, viewport, …). */
+  render: RenderContext;
   /** Parsed stylesheets; populated after the sanitize stage runs. */
   sheets: StyleSheet[];
   /** The single source of truth: every stage appends to this log. */

@@ -9,4 +9,14 @@ export const outlookCom: ClientProfile = {
   quirks: {
     partialMediaQueries: true,
   },
+  darkMode: {
+    strategy: 'partial',
+    respectsColorSchemeMeta: true,
+    respectsPrefersColorScheme: true,
+    invertsUndeclaredColors: false,
+    supportsOgscHack: false,
+    note:
+      'Outlook.com honors @media (prefers-color-scheme: dark) and color-scheme ' +
+      'meta, but rewrites some colors on its own; it does not blanket-invert.',
+  },
 };

@@ -10,4 +10,15 @@ export const gmail: ClientProfile = {
     maxSizeKB: 102, // Gmail clips messages larger than ~102 KB.
     partialMediaQueries: true,
   },
+  darkMode: {
+    strategy: 'auto-invert',
+    respectsColorSchemeMeta: false,
+    respectsPrefersColorScheme: true, // inconsistent across builds
+    invertsUndeclaredColors: true,
+    supportsOgscHack: true, // [data-ogsc]/[data-ogsb] works in many builds
+    note:
+      'Gmail applies partial, inconsistent dark-mode handling: it honors some ' +
+      '@media (prefers-color-scheme: dark) rules but auto-inverts undeclared ' +
+      'colors on many surfaces. [data-ogsc]/[data-ogsb] targeting works in most builds.',
+  },
 };
