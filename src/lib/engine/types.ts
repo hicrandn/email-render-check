@@ -30,6 +30,7 @@ export type MutationStage =
   | 'css-filter'
   | 'inline'
   | 'defaults'
+  | 'dark-mode'
   | 'quirk';
 
 export type MutationAction =
@@ -40,9 +41,35 @@ export type MutationAction =
   | 'remove-attribute'
   | 'rewrite'
   | 'inject-default'
+  | 'auto-invert-color'
+  | 'apply-dark-override'
+  | 'strip-dark-css'
   | 'warn-only';
 
 export type Severity = 'error' | 'warning' | 'info';
+
+// ---------------------------------------------------------------------------
+// Render context: the same client can be simulated under different conditions
+// (dark mode on a phone, images blocked, etc.). Passed to `simulate`.
+// ---------------------------------------------------------------------------
+
+export type ColorScheme = 'light' | 'dark';
+
+export interface RenderContext {
+  /** The OS/app appearance the recipient is viewing under. */
+  colorScheme: ColorScheme;
+  /** Reserved for a later stage; default false. */
+  imagesBlocked: boolean;
+  /** Viewport width in px (e.g. 600 desktop, 375 mobile). */
+  viewportWidth: number;
+}
+
+/** Default context so 2-arg `simulate` calls (and Phase 2 tests) keep working. */
+export const DEFAULT_CONTEXT: RenderContext = {
+  colorScheme: 'light',
+  imagesBlocked: false,
+  viewportWidth: 600,
+};
 
 export interface MutationTarget {
   loc?: SourceLocation;
@@ -83,6 +110,30 @@ export interface ClientQuirks {
   partialMediaQueries?: boolean;
   /** max-width is ignored on non-table elements (Outlook/Word). */
   ignoresMaxWidth?: boolean;
+  /** Percentage widths render unreliably; needs fixed-width + ghost tables (Word). */
+  unreliablePercentWidth?: boolean;
+  /** margin on block elements is ignored/inconsistent; use cell padding (Word). */
+  unreliableBlockMargin?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Dark-mode behavior. Dark mode is not one thing: each client has a distinct
+// strategy, so we model it explicitly instead of a single boolean.
+// ---------------------------------------------------------------------------
+
+export type DarkModeStrategy = 'native' | 'auto-invert' | 'partial' | 'unsupported';
+
+export interface DarkModeProfile {
+  strategy: DarkModeStrategy;
+  /** Honors <meta name="color-scheme"> / supported-color-schemes. */
+  respectsColorSchemeMeta: boolean;
+  /** Honors @media (prefers-color-scheme: dark). */
+  respectsPrefersColorScheme: boolean;
+  /** The dangerous automatic inversion of undeclared colors (Gmail/Yahoo). */
+  invertsUndeclaredColors: boolean;
+  /** [data-ogsc] / [data-ogsb] attribute targeting works. */
+  supportsOgscHack: boolean;
+  note: string;
 }
 
 export interface ClientProfile {
@@ -100,6 +151,8 @@ export interface ClientProfile {
   uaStylesheet: string;
   /** Per-client rendering quirks handled by the quirks stage. */
   quirks: ClientQuirks;
+  /** How this client behaves under dark mode. */
+  darkMode: DarkModeProfile;
 }
 
 // ---------------------------------------------------------------------------
