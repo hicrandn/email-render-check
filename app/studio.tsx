@@ -14,7 +14,7 @@ import {
   type SimulationResult,
 } from '@/src/lib/engine/types';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ComputerIcon, Moon02Icon, SmartPhone01Icon, Sun03Icon } from '@hugeicons/core-free-icons';
+import { ComputerIcon, Mail01Icon, Moon02Icon, SmartPhone01Icon, Sun03Icon } from '@hugeicons/core-free-icons';
 import type { CmView } from './editor';
 
 // CodeMirror touches the DOM — load it client-side only.
@@ -102,7 +102,7 @@ function Segmented<T extends string>({
   onPick: (v: T) => void;
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-0.5">
+    <div className="flex items-center gap-0.5 rounded-lg border border-(--border) bg-(--panel-2) p-0.5">
       {options.map((o) => (
         <button
           key={o.id}
@@ -113,8 +113,8 @@ function Segmented<T extends string>({
           onClick={() => onPick(o.id)}
           className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
             value === o.id
-              ? 'bg-[var(--panel)] text-[var(--fg)] shadow-sm ring-1 ring-[var(--border)]'
-              : 'text-[var(--fg-muted)] hover:text-[var(--fg)]'
+              ? 'bg-(--panel) text-(--fg) shadow-sm ring-1 ring-(--border)'
+              : 'text-(--fg-muted) hover:text-(--fg)'
           }`}
         >
           {o.icon}
@@ -130,33 +130,33 @@ function IssueRow({ m, onSelect }: { m: Mutation; onSelect: () => void }) {
     <li>
       <button
         onClick={onSelect}
-        className="group block w-full px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.03]"
+        className="group block w-full px-3 py-2.5 text-left transition-colors hover:bg-black/3 dark:hover:bg-white/3"
       >
         <div className="flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset ${sev.badge}`}>
             {sev.label}
           </span>
-          <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-[var(--fg-muted)] dark:bg-white/10">
+          <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-(--fg-muted) dark:bg-white/10">
             {m.action}
           </code>
           {m.target.property && (
-            <code className="font-mono text-[11px] text-[var(--fg-muted)]">
+            <code className="font-mono text-[11px] text-(--fg-muted)">
               {m.target.property}
               {m.target.value ? `: ${m.target.value}` : ''}
             </code>
           )}
           {m.target.element && !m.target.property && (
-            <code className="font-mono text-[11px] text-[var(--fg-muted)]">&lt;{m.target.element}&gt;</code>
+            <code className="font-mono text-[11px] text-(--fg-muted)">&lt;{m.target.element}&gt;</code>
           )}
           {m.target.loc && (
-            <span className="ml-auto font-mono text-[10px] text-[var(--fg-muted)] group-hover:text-sky-500">
+            <span className="ml-auto font-mono text-[10px] text-(--fg-muted) group-hover:text-sky-500">
               L{m.target.loc.startLine}:{m.target.loc.startCol}
             </span>
           )}
         </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-[var(--fg)]/80">{m.reason}</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-(--fg)/80">{m.reason}</p>
         {m.fix && (
-          <p className="mt-1 text-[11px] leading-relaxed text-[var(--fg-muted)]">
+          <p className="mt-1 text-[11px] leading-relaxed text-(--fg-muted)">
             <span className="font-semibold">Fix:</span> {m.fix}
           </p>
         )}
@@ -262,23 +262,23 @@ export default function Studio() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--canvas)] text-[var(--fg)]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-(--canvas) text-(--fg)">
       {/* Top bar */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel)] px-4 py-2.5">
-        <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-xs font-bold text-white dark:bg-white dark:text-zinc-900">
-          ✉
+      <header className="flex shrink-0 items-center gap-3 border-b border-(--border) bg-(--panel) px-4 py-2.5">
+        <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">
+          <HugeiconsIcon icon={Mail01Icon} size={14} strokeWidth={2} />
         </div>
         <h1 className="text-sm font-semibold tracking-tight">Email Renderer</h1>
-        <span className="hidden text-xs text-[var(--fg-muted)] sm:inline">
+        <span className="hidden text-xs text-(--fg-muted) sm:inline">
           See how each client mangles your HTML — and why.
         </span>
       </header>
 
       {/* Pane-title strip — reads as one filename row across both panes. */}
-      <div className="flex shrink-0 items-stretch border-b border-[var(--border)] bg-[var(--panel-2)] text-[11px] text-[var(--fg-muted)]">
-        <div className="relative flex w-[46%] min-w-0 items-center justify-center border-r border-[var(--border)] px-3 py-2">
+      <div className="flex shrink-0 items-stretch border-b border-(--border) bg-(--panel-2) text-[11px] text-(--fg-muted)">
+        <div className="relative flex w-[46%] min-w-0 items-center justify-center border-r border-(--border) px-3 py-2">
           <span className="font-mono">source.html</span>
-          <span className="absolute right-3 font-mono tabular-nums text-[var(--fg-muted)]/70">
+          <span className="absolute right-3 font-mono tabular-nums text-(--fg-muted)/70">
             {source.split('\n').length} lines
           </span>
         </div>
@@ -291,7 +291,7 @@ export default function Studio() {
 
       <div className="flex min-h-0 flex-1">
         {/* ---- Editor pane ---- */}
-        <section className="flex w-[46%] min-w-0 min-h-0 flex-col border-r border-[var(--border)] bg-[var(--panel)]">
+        <section className="flex w-[46%] min-w-0 min-h-0 flex-col border-r border-(--border) bg-(--panel)">
           <div className="min-h-0 flex-1 overflow-hidden">
             <Editor value={source} onChange={setSource} onView={(v) => (viewRef.current = v)} theme="light" />
           </div>
@@ -300,7 +300,7 @@ export default function Studio() {
         {/* ---- Preview + issues pane ---- */}
         <section className="flex min-h-0 flex-1 min-w-0 flex-col">
           {/* Client tabs + preview view controls (device / light-dark) */}
-          <nav className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--panel)] px-2 py-1.5">
+          <nav className="flex shrink-0 items-center gap-2 border-b border-(--border) bg-(--panel) px-2 py-1.5">
             <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {CLIENT_IDS.map((id) => {
               const res = results[id];
@@ -318,8 +318,8 @@ export default function Studio() {
                   onClick={() => setActive(id)}
                   className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     isActive
-                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-                      : 'text-[var(--fg-muted)] hover:bg-black/5 dark:hover:bg-white/5'
+                      ? 'bg-(--tab-active-bg) text-(--tab-active-fg)'
+                      : 'text-(--fg-muted) hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
                   {shortName(id)}
@@ -328,11 +328,9 @@ export default function Studio() {
                       className={`rounded-full px-1.5 text-[10px] font-semibold ${
                         worst === 'error'
                           ? 'bg-red-500 text-white'
-                          : isActive
-                            ? 'bg-white/25 text-white dark:bg-zinc-900/15 dark:text-zinc-900'
-                            : worst === 'warning'
-                              ? 'bg-amber-400/90 text-amber-950'
-                              : 'bg-sky-500/90 text-white'
+                          : worst === 'warning'
+                            ? 'bg-amber-400/90 text-white'
+                            : 'bg-sky-500/90 text-white'
                       }`}
                     >
                       {badgeCount}
@@ -374,12 +372,12 @@ export default function Studio() {
           <div
             style={{ height: `${previewPct}%` }}
             className={`flex min-h-0 shrink-0 flex-col overflow-auto p-4 transition-colors ${
-              previewScheme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-[var(--preview-bg)]'
+              previewScheme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-(--preview-bg)'
             }`}
           >
             <div
               style={{ maxWidth: DEVICE_WIDTH[device] }}
-              className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-black/5 transition-[max-width] duration-200 dark:ring-white/10"
+              className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-(--preview-frame-ring) transition-[max-width] duration-200"
             >
               <iframe
                 title={`${active} preview`}
@@ -395,18 +393,18 @@ export default function Studio() {
             onPointerDown={onDividerDown}
             onPointerMove={onDividerMove}
             onPointerUp={onDividerUp}
-            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-[var(--border)] bg-[var(--panel-2)] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-(--border) bg-(--panel-2) hover:bg-black/4 dark:hover:bg-white/6"
           >
-            <span className="h-0.5 w-8 rounded-full bg-[var(--border)] group-hover:bg-[var(--fg-muted)]" />
+            <span className="h-0.5 w-8 rounded-full bg-(--border) group-hover:bg-(--fg-muted)" />
           </div>
 
           {/* Issues panel */}
-          <div className="flex min-h-0 flex-1 flex-col border-t border-[var(--border)] bg-[var(--panel)]">
-            <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border-soft)] px-3 py-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">
+          <div className="flex min-h-0 flex-1 flex-col border-t border-(--border) bg-(--panel)">
+            <div className="flex shrink-0 items-center gap-3 border-b border-(--border-soft) px-3 py-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-(--fg-muted)">
                 Incompatibilities
               </span>
-              <div className="flex items-center gap-3 text-[11px] text-[var(--fg-muted)]">
+              <div className="flex items-center gap-3 text-[11px] text-(--fg-muted)">
                 {counts.error > 0 && (
                   <span className="flex items-center gap-1">
                     <span className="h-2 w-2 rounded-full bg-red-500" />
@@ -425,15 +423,15 @@ export default function Studio() {
             <div className="min-h-0 flex-1 overflow-auto">
               {groups.map((g) => (
                 <section key={g.stage}>
-                  <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--border-soft)] bg-[var(--panel-2)] px-3 py-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">
+                  <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-(--border-soft) bg-(--panel-2) px-3 py-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-(--fg-muted)">
                       {STAGE_LABELS[g.stage]}
                     </span>
-                    <span className="rounded-full bg-black/5 px-1.5 text-[10px] font-semibold text-[var(--fg-muted)] dark:bg-white/10">
+                    <span className="rounded-full bg-(--surface-tint) px-1.5 text-[10px] font-semibold text-(--fg-muted)">
                       {g.items.length}
                     </span>
                   </div>
-                  <ul className="divide-y divide-[var(--border-soft)]">
+                  <ul className="divide-y divide-(--border-soft)">
                     {g.items.map((m, i) => (
                       <IssueRow key={i} m={m} onSelect={() => scrollToLoc(m)} />
                     ))}
@@ -443,7 +441,7 @@ export default function Studio() {
               {result.mutations.length === 0 && (
                 <div className="flex flex-col items-center justify-center gap-1 px-3 py-10 text-center">
                   <span className="text-2xl">🎉</span>
-                  <p className="text-xs text-[var(--fg-muted)]">
+                  <p className="text-xs text-(--fg-muted)">
                     No incompatibilities for {shortName(active)}.
                   </p>
                 </div>
