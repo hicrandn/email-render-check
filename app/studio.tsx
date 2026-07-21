@@ -38,9 +38,6 @@ const SAMPLE = `<!doctype html>
                style="background:#ffffff;border-radius:8px;overflow:hidden">
           <tr><td align="center" style="background:#2563eb;padding:36px 32px">
             <h1 style="margin:0 0 6px;color:#ffffff;font-size:30px">Hello, gorgeous!</h1>
-            <p style="margin:0;color:#dbeafe;font-size:14px">
-              This email is about to have a very bad day in Outlook.
-            </p>
           </td></tr>
 
           <tr><td class="card" style="display:flex;gap:12px;padding:36px 40px 24px">
@@ -464,7 +461,7 @@ export default function Studio() {
           >
             <div
               style={{ maxWidth: DEVICE_WIDTH[device] }}
-              className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-(--preview-frame-ring) transition-[max-width] duration-200"
+              className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg shadow-xl ring-1 ring-(--preview-frame-ring) transition-[max-width] "
             >
               <iframe
                 title={`${active} preview`}
