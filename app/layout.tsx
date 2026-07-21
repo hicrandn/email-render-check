@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Email Renderer",
+  title: "Mail Check",
   description: "Simulate how email clients render your HTML — and why features break.",
 };
 

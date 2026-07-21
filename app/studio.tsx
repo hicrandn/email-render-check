@@ -14,7 +14,7 @@ import {
   type SimulationResult,
 } from '@/src/lib/engine/types';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ComputerIcon, Moon02Icon, SmartPhone01Icon, Sun03Icon } from '@hugeicons/core-free-icons';
+import { ComputerIcon, Mail01Icon, Moon02Icon, SmartPhone01Icon, Sun03Icon } from '@hugeicons/core-free-icons';
 import type { CmView } from './editor';
 
 // CodeMirror touches the DOM — load it client-side only.
@@ -36,12 +36,33 @@ const SAMPLE = `<!doctype html>
       <tr><td align="center">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0"
                style="background:#ffffff;border-radius:8px;overflow:hidden">
-          <tr><td align="center" style="background:#2563eb;padding:32px">
-            <h1 style="margin:0;color:#fff;font-size:28px">🚀 Welcome!</h1>
+          <tr><td align="center" style="background:#2563eb;padding:36px 32px">
+            <h1 style="margin:0 0 6px;color:#ffffff;font-size:30px">Hello, gorgeous!</h1>
           </td></tr>
-          <tr><td class="card" style="display:flex;gap:12px;padding:40px">
-            <h2 style="margin:0 0 16px;font-size:24px;color:#111827">Hello John 👋</h2>
-            <marquee>Limited offer!</marquee>
+
+          <tr><td class="card" style="display:flex;gap:12px;padding:36px 40px 24px">
+            <p style="margin:0;color:#4b5563;font-size:15px;line-height:1.6">
+              Click through the client tabs. Outlook is about to soften these rounded
+              corners — by deleting them — and flatten this flexbox like it's 2007.
+              Paste your own HTML on the left: every declaration a client drops shows
+              up below with the reason and a link to the evidence.
+            </p>
+          </td></tr>
+
+          <tr><td align="center" style="padding:0 40px 36px">
+            <a href="https://www.caniemail.com" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 28px;display:inline-block;font-size:15px;font-weight:bold;border-radius:999px;box-shadow:0 6px 16px rgba(37,99,235,0.35)">
+              Browse the support data →
+            </a>
+            <p style="margin:12px 0 0;font-size:12px;color:#9ca3af">
+              Yes, that pill is round. Ask Outlook how it feels about that.
+            </p>
+          </td></tr>
+
+          <tr><td align="center" style="background:#f9fafb;padding:20px 40px">
+            <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6">
+              No account, no tracking pixel, no "click here to view in browser".<br>
+              Everything runs locally in your browser.
+            </p>
           </td></tr>
         </table>
       </td></tr>
@@ -69,6 +90,20 @@ const SEVERITY: Record<Mutation['severity'], { dot: string; badge: string; label
 
 function shortName(id: ClientId): string {
   return PROFILES[id].name.split(' (')[0];
+}
+
+/**
+ * Identity of a distinct issue. Occurrences of the same feature are collapsed
+ * into one row, but a differing action or severity stays separate — merging
+ * those would hide genuinely different findings.
+ */
+const issueKey = (m: Mutation) => `${m.feature}|${m.action}|${m.severity}`;
+
+/** Distinct issues at a severity — not raw occurrences, so counts don't inflate. */
+function distinctCount(muts: Mutation[], severity: Severity): number {
+  const keys = new Set<string>();
+  for (const m of muts) if (m.severity === severity) keys.add(issueKey(m));
+  return keys.size;
 }
 
 type PreviewScheme = 'light' | 'dark';
@@ -102,7 +137,7 @@ function Segmented<T extends string>({
   onPick: (v: T) => void;
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-0.5">
+    <div className="flex items-center gap-0.5 rounded-lg border border-(--border) bg-(--panel-2) p-0.5">
       {options.map((o) => (
         <button
           key={o.id}
@@ -113,8 +148,8 @@ function Segmented<T extends string>({
           onClick={() => onPick(o.id)}
           className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
             value === o.id
-              ? 'bg-[var(--panel)] text-[var(--fg)] shadow-sm ring-1 ring-[var(--border)]'
-              : 'text-[var(--fg-muted)] hover:text-[var(--fg)]'
+              ? 'bg-(--panel) text-(--fg) shadow-sm ring-1 ring-(--border)'
+              : 'text-(--fg-muted) hover:text-(--fg)'
           }`}
         >
           {o.icon}
@@ -124,52 +159,86 @@ function Segmented<T extends string>({
   );
 }
 
-function IssueRow({ m, onSelect }: { m: Mutation; onSelect: () => void }) {
-  const sev = SEVERITY[m.severity];
+/**
+ * One row per DISTINCT issue. The same feature hit at 15 source locations is a
+ * single row with 15 jump-to chips, not 15 copies of the same explanation —
+ * otherwise the genuinely different problems drown in repetition.
+ */
+function IssueRow({ items, onSelect }: { items: Mutation[]; onSelect: (m: Mutation) => void }) {
+  const head = items[0];
+  const sev = SEVERITY[head.severity];
+  const located = items.filter((m) => m.target.loc);
+
+  // Only show a property/value in the header when every occurrence agrees;
+  // otherwise the header would misrepresent the other occurrences.
+  const properties = new Set(items.map((m) => m.target.property).filter(Boolean));
+  const values = new Set(items.map((m) => m.target.value).filter(Boolean));
+  const property = properties.size === 1 ? [...properties][0] : undefined;
+  const value = property && values.size === 1 ? [...values][0] : undefined;
+  const elements = new Set(items.map((m) => m.target.element).filter(Boolean));
+  const element = !property && elements.size === 1 ? [...elements][0] : undefined;
+
   return (
-    <li>
-      <button
-        onClick={onSelect}
-        className="group block w-full px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.03]"
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset ${sev.badge}`}>
-            {sev.label}
-          </span>
-          <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-[var(--fg-muted)] dark:bg-white/10">
-            {m.action}
+    <li className="px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset ${sev.badge}`}>
+          {sev.label}
+        </span>
+        <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-(--fg-muted) dark:bg-white/10">
+          {head.action}
+        </code>
+        {property && (
+          <code className="font-mono text-[11px] text-(--fg-muted)">
+            {property}
+            {value ? `: ${value}` : ''}
           </code>
-          {m.target.property && (
-            <code className="font-mono text-[11px] text-[var(--fg-muted)]">
-              {m.target.property}
-              {m.target.value ? `: ${m.target.value}` : ''}
-            </code>
-          )}
-          {m.target.element && !m.target.property && (
-            <code className="font-mono text-[11px] text-[var(--fg-muted)]">&lt;{m.target.element}&gt;</code>
-          )}
-          {m.target.loc && (
-            <span className="ml-auto font-mono text-[10px] text-[var(--fg-muted)] group-hover:text-sky-500">
-              L{m.target.loc.startLine}:{m.target.loc.startCol}
-            </span>
-          )}
-        </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-[var(--fg)]/80">{m.reason}</p>
-        {m.fix && (
-          <p className="mt-1 text-[11px] leading-relaxed text-[var(--fg-muted)]">
-            <span className="font-semibold">Fix:</span> {m.fix}
-          </p>
         )}
-        <a
-          href={m.evidence}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="mt-1 inline-block text-[11px] font-medium text-sky-600 hover:underline dark:text-sky-400"
-        >
-          {m.feature} ↗
-        </a>
-      </button>
+        {element && (
+          <code className="font-mono text-[11px] text-(--fg-muted)">&lt;{element}&gt;</code>
+        )}
+        {items.length > 1 && (
+          <span className="ml-auto rounded-full bg-(--surface-tint) px-1.5 text-[10px] font-semibold text-(--fg-muted)">
+            {items.length}×
+          </span>
+        )}
+      </div>
+
+      <p className="mt-1.5 text-xs leading-relaxed text-(--fg)/80">{head.reason}</p>
+      {head.fix && (
+        <p className="mt-1 text-[11px] leading-relaxed text-(--fg-muted)">
+          <span className="font-semibold">Fix:</span> {head.fix}
+        </p>
+      )}
+
+      {located.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {located.map((m, i) => (
+            <button
+              key={i}
+              onClick={() => onSelect(m)}
+              title={
+                m.target.property
+                  ? `${m.target.property}${m.target.value ? `: ${m.target.value}` : ''}`
+                  : m.target.element
+                    ? `<${m.target.element}>`
+                    : undefined
+              }
+              className="rounded bg-(--surface-tint) px-1.5 py-0.5 font-mono text-[10px] text-(--fg-muted) transition-colors hover:text-sky-500"
+            >
+              L{m.target.loc!.startLine}:{m.target.loc!.startCol}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <a
+        href={head.evidence}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1 inline-block text-[11px] font-medium text-sky-600 hover:underline dark:text-sky-400"
+      >
+        {head.feature} ↗
+      </a>
     </li>
   );
 }
@@ -212,21 +281,35 @@ export default function Studio() {
   }, [debounced, renderCtx]);
 
   const result = results[active];
-  const counts = useMemo(() => {
-    const c = { error: 0, warning: 0, info: 0 };
-    for (const m of result.mutations) c[m.severity]++;
-    return c;
-  }, [result]);
+  const counts = useMemo(
+    () => ({
+      error: distinctCount(result.mutations, 'error'),
+      warning: distinctCount(result.mutations, 'warning'),
+      info: distinctCount(result.mutations, 'info'),
+    }),
+    [result],
+  );
 
-  // Group the active client's mutations by pipeline stage, in pipeline order.
+  // Group by pipeline stage, then collapse repeated occurrences of the same
+  // issue within each stage. Mutations arrive pre-sorted, so Map insertion
+  // order keeps both levels deterministic.
   const groups = useMemo(() => {
-    const byStage = new Map<MutationStage, Mutation[]>();
+    const byStage = new Map<MutationStage, Map<string, Mutation[]>>();
     for (const m of result.mutations) {
-      const list = byStage.get(m.stage);
+      let stage = byStage.get(m.stage);
+      if (!stage) {
+        stage = new Map();
+        byStage.set(m.stage, stage);
+      }
+      const key = issueKey(m);
+      const list = stage.get(key);
       if (list) list.push(m);
-      else byStage.set(m.stage, [m]);
+      else stage.set(key, [m]);
     }
-    return STAGE_ORDER.filter((s) => byStage.has(s)).map((s) => ({ stage: s, items: byStage.get(s)! }));
+    return STAGE_ORDER.filter((s) => byStage.has(s)).map((s) => ({
+      stage: s,
+      issues: [...byStage.get(s)!.entries()].map(([key, items]) => ({ key, items })),
+    }));
   }, [result]);
 
   // Outlook/Win never switches to dark — surface that instead of a fake preview.
@@ -262,23 +345,23 @@ export default function Studio() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--canvas)] text-[var(--fg)]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-(--canvas) text-(--fg)">
       {/* Top bar */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel)] px-4 py-2.5">
-        <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-xs font-bold text-white dark:bg-white dark:text-zinc-900">
-          ✉
+      <header className="flex shrink-0 items-center gap-3 border-b border-(--border) bg-(--panel) px-4 py-2.5">
+        <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">
+          <HugeiconsIcon icon={Mail01Icon} size={14} strokeWidth={2} />
         </div>
-        <h1 className="text-sm font-semibold tracking-tight">Email Renderer</h1>
-        <span className="hidden text-xs text-[var(--fg-muted)] sm:inline">
+        <h1 className="text-sm font-semibold tracking-tight">Mail Check</h1>
+        <span className="hidden text-xs text-(--fg-muted) sm:inline">
           See how each client mangles your HTML — and why.
         </span>
       </header>
 
       {/* Pane-title strip — reads as one filename row across both panes. */}
-      <div className="flex shrink-0 items-stretch border-b border-[var(--border)] bg-[var(--panel-2)] text-[11px] text-[var(--fg-muted)]">
-        <div className="relative flex w-[46%] min-w-0 items-center justify-center border-r border-[var(--border)] px-3 py-2">
+      <div className="flex shrink-0 items-stretch border-b border-(--border) bg-(--panel-2) text-[11px] text-(--fg-muted)">
+        <div className="relative flex w-[46%] min-w-0 items-center justify-center border-r border-(--border) px-3 py-2">
           <span className="font-mono">source.html</span>
-          <span className="absolute right-3 font-mono tabular-nums text-[var(--fg-muted)]/70">
+          <span className="absolute right-3 font-mono tabular-nums text-(--fg-muted)/70">
             {source.split('\n').length} lines
           </span>
         </div>
@@ -291,7 +374,7 @@ export default function Studio() {
 
       <div className="flex min-h-0 flex-1">
         {/* ---- Editor pane ---- */}
-        <section className="flex w-[46%] min-w-0 min-h-0 flex-col border-r border-[var(--border)] bg-[var(--panel)]">
+        <section className="flex w-[46%] min-w-0 min-h-0 flex-col border-r border-(--border) bg-(--panel)">
           <div className="min-h-0 flex-1 overflow-hidden">
             <Editor value={source} onChange={setSource} onView={(v) => (viewRef.current = v)} theme="light" />
           </div>
@@ -300,17 +383,18 @@ export default function Studio() {
         {/* ---- Preview + issues pane ---- */}
         <section className="flex min-h-0 flex-1 min-w-0 flex-col">
           {/* Client tabs + preview view controls (device / light-dark) */}
-          <nav className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--panel)] px-2 py-1.5">
+          <nav className="flex shrink-0 items-center gap-2 border-b border-(--border) bg-(--panel) px-2 py-1.5">
             <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {CLIENT_IDS.map((id) => {
               const res = results[id];
               // Badge shows the count of the WORST severity present, colored to
               // match — not the total mutation count. Otherwise a client with 90
               // informational notes and 1 real error reads as "91 errors" (red).
-              const errs = res.mutations.filter((m) => m.severity === 'error').length;
-              const warns = res.mutations.filter((m) => m.severity === 'warning').length;
+              const errs = distinctCount(res.mutations, 'error');
+              const warns = distinctCount(res.mutations, 'warning');
               const worst: Severity = errs > 0 ? 'error' : warns > 0 ? 'warning' : 'info';
-              const badgeCount = errs > 0 ? errs : warns > 0 ? warns : res.mutations.length;
+              const badgeCount =
+                errs > 0 ? errs : warns > 0 ? warns : distinctCount(res.mutations, 'info');
               const isActive = active === id;
               return (
                 <button
@@ -318,8 +402,8 @@ export default function Studio() {
                   onClick={() => setActive(id)}
                   className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     isActive
-                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-                      : 'text-[var(--fg-muted)] hover:bg-black/5 dark:hover:bg-white/5'
+                      ? 'bg-(--tab-active-bg) text-(--tab-active-fg)'
+                      : 'text-(--fg-muted) hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
                   {shortName(id)}
@@ -328,11 +412,9 @@ export default function Studio() {
                       className={`rounded-full px-1.5 text-[10px] font-semibold ${
                         worst === 'error'
                           ? 'bg-red-500 text-white'
-                          : isActive
-                            ? 'bg-white/25 text-white dark:bg-zinc-900/15 dark:text-zinc-900'
-                            : worst === 'warning'
-                              ? 'bg-amber-400/90 text-amber-950'
-                              : 'bg-sky-500/90 text-white'
+                          : worst === 'warning'
+                            ? 'bg-amber-400/90 text-white'
+                            : 'bg-sky-500/90 text-white'
                       }`}
                     >
                       {badgeCount}
@@ -374,12 +456,12 @@ export default function Studio() {
           <div
             style={{ height: `${previewPct}%` }}
             className={`flex min-h-0 shrink-0 flex-col overflow-auto p-4 transition-colors ${
-              previewScheme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-[var(--preview-bg)]'
+              previewScheme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-(--preview-bg)'
             }`}
           >
             <div
               style={{ maxWidth: DEVICE_WIDTH[device] }}
-              className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-black/5 transition-[max-width] duration-200 dark:ring-white/10"
+              className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg shadow-xl ring-1 ring-(--preview-frame-ring) transition-[max-width] "
             >
               <iframe
                 title={`${active} preview`}
@@ -395,18 +477,18 @@ export default function Studio() {
             onPointerDown={onDividerDown}
             onPointerMove={onDividerMove}
             onPointerUp={onDividerUp}
-            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-[var(--border)] bg-[var(--panel-2)] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-(--border) bg-(--panel-2) hover:bg-black/4 dark:hover:bg-white/6"
           >
-            <span className="h-0.5 w-8 rounded-full bg-[var(--border)] group-hover:bg-[var(--fg-muted)]" />
+            <span className="h-0.5 w-8 rounded-full bg-(--border) group-hover:bg-(--fg-muted)" />
           </div>
 
           {/* Issues panel */}
-          <div className="flex min-h-0 flex-1 flex-col border-t border-[var(--border)] bg-[var(--panel)]">
-            <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border-soft)] px-3 py-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">
+          <div className="flex min-h-0 flex-1 flex-col border-t border-(--border) bg-(--panel)">
+            <div className="flex shrink-0 items-center gap-3 border-b border-(--border-soft) px-3 py-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-(--fg-muted)">
                 Incompatibilities
               </span>
-              <div className="flex items-center gap-3 text-[11px] text-[var(--fg-muted)]">
+              <div className="flex items-center gap-3 text-[11px] text-(--fg-muted)">
                 {counts.error > 0 && (
                   <span className="flex items-center gap-1">
                     <span className="h-2 w-2 rounded-full bg-red-500" />
@@ -425,17 +507,17 @@ export default function Studio() {
             <div className="min-h-0 flex-1 overflow-auto">
               {groups.map((g) => (
                 <section key={g.stage}>
-                  <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--border-soft)] bg-[var(--panel-2)] px-3 py-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">
+                  <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-(--border-soft) bg-(--panel-2) px-3 py-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-(--fg-muted)">
                       {STAGE_LABELS[g.stage]}
                     </span>
-                    <span className="rounded-full bg-black/5 px-1.5 text-[10px] font-semibold text-[var(--fg-muted)] dark:bg-white/10">
-                      {g.items.length}
+                    <span className="rounded-full bg-(--surface-tint) px-1.5 text-[10px] font-semibold text-(--fg-muted)">
+                      {g.issues.length}
                     </span>
                   </div>
-                  <ul className="divide-y divide-[var(--border-soft)]">
-                    {g.items.map((m, i) => (
-                      <IssueRow key={i} m={m} onSelect={() => scrollToLoc(m)} />
+                  <ul className="divide-y divide-(--border-soft)">
+                    {g.issues.map((iss) => (
+                      <IssueRow key={iss.key} items={iss.items} onSelect={scrollToLoc} />
                     ))}
                   </ul>
                 </section>
@@ -443,7 +525,7 @@ export default function Studio() {
               {result.mutations.length === 0 && (
                 <div className="flex flex-col items-center justify-center gap-1 px-3 py-10 text-center">
                   <span className="text-2xl">🎉</span>
-                  <p className="text-xs text-[var(--fg-muted)]">
+                  <p className="text-xs text-(--fg-muted)">
                     No incompatibilities for {shortName(active)}.
                   </p>
                 </div>

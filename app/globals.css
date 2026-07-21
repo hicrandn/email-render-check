@@ -16,6 +16,11 @@
   --border-soft: #f0f0f1;
   --fg: #18181b;
   --fg-muted: #6b7280;
+  --preview-frame-ring: rgb(0 0 0 / 0.05);
+  --tab-active-bg: #18181b;
+  --tab-active-fg: #ffffff;
+  --tab-badge-active-bg: rgb(255 255 255 / 0.25);
+  --surface-tint: rgb(0 0 0 / 0.05);
 }
 
 [data-theme="dark"] {
@@ -27,6 +32,11 @@
   --border-soft: #17171f;
   --fg: #e6e6ea;
   --fg-muted: #7c7c8a;
+  --preview-frame-ring: rgb(255 255 255 / 0.1);
+  --tab-active-bg: #ffffff;
+  --tab-active-fg: #18181b;
+  --tab-badge-active-bg: rgb(24 24 27 / 0.15);
+  --surface-tint: rgb(255 255 255 / 0.1);
 }
 
 @theme inline {
