@@ -10,6 +10,7 @@ import {
   type Mutation,
   type MutationStage,
   type RenderContext,
+  type Severity,
   type SimulationResult,
 } from '@/src/lib/engine/types';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -303,7 +304,13 @@ export default function Studio() {
             <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {CLIENT_IDS.map((id) => {
               const res = results[id];
+              // Badge shows the count of the WORST severity present, colored to
+              // match — not the total mutation count. Otherwise a client with 90
+              // informational notes and 1 real error reads as "91 errors" (red).
               const errs = res.mutations.filter((m) => m.severity === 'error').length;
+              const warns = res.mutations.filter((m) => m.severity === 'warning').length;
+              const worst: Severity = errs > 0 ? 'error' : warns > 0 ? 'warning' : 'info';
+              const badgeCount = errs > 0 ? errs : warns > 0 ? warns : res.mutations.length;
               const isActive = active === id;
               return (
                 <button
@@ -319,14 +326,16 @@ export default function Studio() {
                   {res.mutations.length > 0 && (
                     <span
                       className={`rounded-full px-1.5 text-[10px] font-semibold ${
-                        errs > 0
+                        worst === 'error'
                           ? 'bg-red-500 text-white'
                           : isActive
                             ? 'bg-white/25 text-white dark:bg-zinc-900/15 dark:text-zinc-900'
-                            : 'bg-amber-400/90 text-amber-950'
+                            : worst === 'warning'
+                              ? 'bg-amber-400/90 text-amber-950'
+                              : 'bg-sky-500/90 text-white'
                       }`}
                     >
-                      {res.mutations.length}
+                      {badgeCount}
                     </span>
                   )}
                 </button>
@@ -372,17 +381,11 @@ export default function Studio() {
               style={{ maxWidth: DEVICE_WIDTH[device] }}
               className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-black/5 transition-[max-width] duration-200 dark:ring-white/10"
             >
-              <div className="flex shrink-0 items-center gap-1.5 border-b border-zinc-100 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-800/60">
-                <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
-              </div>
               <iframe
                 title={`${active} preview`}
                 sandbox=""
                 srcDoc={result.html}
-                style={{ colorScheme: previewScheme }}
-                className="min-h-0 w-full flex-1 border-0 bg-white"
+                className="min-h-0 w-full flex-1 border-0"
               />
             </div>
           </div>
@@ -392,9 +395,9 @@ export default function Studio() {
             onPointerDown={onDividerDown}
             onPointerMove={onDividerMove}
             onPointerUp={onDividerUp}
-            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-[var(--border)] bg-[var(--panel-2)] hover:bg-sky-500/10"
+            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-[var(--border)] bg-[var(--panel-2)] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
           >
-            <span className="h-0.5 w-8 rounded-full bg-[var(--border)] group-hover:bg-sky-400" />
+            <span className="h-0.5 w-8 rounded-full bg-[var(--border)] group-hover:bg-[var(--fg-muted)]" />
           </div>
 
           {/* Issues panel */}
