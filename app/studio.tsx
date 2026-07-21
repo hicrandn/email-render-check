@@ -36,71 +36,32 @@ const SAMPLE = `<!doctype html>
       <tr><td align="center">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0"
                style="background:#ffffff;border-radius:8px;overflow:hidden">
-          <tr><td align="center" style="background:#2563eb;padding:32px">
-            <h1 style="margin:0;color:#fff;font-size:28px">🚀 Welcome!</h1>
-          </td></tr>
-          <tr><td class="card" style="display:flex;gap:12px;padding:40px 40px 24px">
-            <p style="margin:0;color:#4b5563;font-size:15px;line-height:1.6">
-              Looks lovely, doesn't it? Now click through those client tabs. ☝️
-              Outlook is about to soften these rounded corners — by deleting them —
-              and flatten this flexbox like it's 2007. Because for Word, it is. 💀
+          <tr><td align="center" style="background:#2563eb;padding:36px 32px">
+            <h1 style="margin:0 0 6px;color:#ffffff;font-size:30px">Hello, gorgeous!</h1>
+            <p style="margin:0;color:#dbeafe;font-size:14px">
+              This email is about to have a very bad day in Outlook.
             </p>
           </td></tr>
 
-          <tr><td style="padding:0 40px 24px">
+          <tr><td class="card" style="display:flex;gap:12px;padding:36px 40px 24px">
             <p style="margin:0;color:#4b5563;font-size:15px;line-height:1.6">
-              Paste your own HTML in the editor on the left. Every declaration is
-              checked against real Can I Email support data, and anything a client
-              strips shows up below with the reason and a link to the evidence.
+              Click through the client tabs. Outlook is about to soften these rounded
+              corners — by deleting them — and flatten this flexbox like it's 2007.
+              Paste your own HTML on the left: every declaration a client drops shows
+              up below with the reason and a link to the evidence.
             </p>
           </td></tr>
 
-          <tr><td align="center" style="padding:0 40px 32px">
-            <a href="https://www.caniemail.com" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 28px;display:inline-block;font-size:15px;font-weight:bold">
-              Browse the support data
+          <tr><td align="center" style="padding:0 40px 36px">
+            <a href="https://www.caniemail.com" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 28px;display:inline-block;font-size:15px;font-weight:bold;border-radius:999px;box-shadow:0 6px 16px rgba(37,99,235,0.35)">
+              Browse the support data →
             </a>
-          </td></tr>
-
-          <tr><td style="padding:0 40px">
-            <hr style="border:none;border-top:1px solid #e5e7eb;margin:0">
-          </td></tr>
-
-          <tr><td style="padding:28px 40px">
-            <h3 style="margin:0 0 14px;font-size:16px;color:#111827">What this tool checks</h3>
-            <p style="margin:0 0 10px;color:#4b5563;font-size:14px;line-height:1.6">
-              <strong style="color:#111827">Unsupported CSS</strong> — declarations each client
-              quietly drops, matched per property and per value.
-            </p>
-            <p style="margin:0 0 10px;color:#4b5563;font-size:14px;line-height:1.6">
-              <strong style="color:#111827">Rendering quirks</strong> — the Word engine ignoring
-              media queries, Gmail clipping past 102&nbsp;KB, and friends.
-            </p>
-            <p style="margin:0;color:#4b5563;font-size:14px;line-height:1.6">
-              <strong style="color:#111827">Dark mode</strong> — which clients honour your styles
-              and which invert your colours for you, whether you asked or not.
+            <p style="margin:12px 0 0;font-size:12px;color:#9ca3af">
+              Yes, that pill is round. Ask Outlook how it feels about that.
             </p>
           </td></tr>
 
-          <tr><td style="padding:0 40px 32px">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td align="center" style="padding:8px">
-                  <strong style="font-size:20px;color:#2563eb">5</strong><br>
-                  <span style="font-size:13px;color:#6b7280">Clients simulated</span>
-                </td>
-                <td align="center" style="padding:8px">
-                  <strong style="font-size:20px;color:#2563eb">6</strong><br>
-                  <span style="font-size:13px;color:#6b7280">Pipeline stages</span>
-                </td>
-                <td align="center" style="padding:8px">
-                  <strong style="font-size:20px;color:#2563eb">0</strong><br>
-                  <span style="font-size:13px;color:#6b7280">Emails actually sent</span>
-                </td>
-              </tr>
-            </table>
-          </td></tr>
-
-          <tr><td align="center" style="background:#f9fafb;padding:24px 40px">
+          <tr><td align="center" style="background:#f9fafb;padding:20px 40px">
             <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6">
               No account, no tracking pixel, no "click here to view in browser".<br>
               Everything runs locally in your browser.
