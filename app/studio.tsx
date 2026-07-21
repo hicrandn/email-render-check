@@ -39,9 +39,72 @@ const SAMPLE = `<!doctype html>
           <tr><td align="center" style="background:#2563eb;padding:32px">
             <h1 style="margin:0;color:#fff;font-size:28px">🚀 Welcome!</h1>
           </td></tr>
-          <tr><td class="card" style="display:flex;gap:12px;padding:40px">
-            <h2 style="margin:0 0 16px;font-size:24px;color:#111827">Hello John 👋</h2>
-            <marquee>Limited offer!</marquee>
+          <tr><td class="card" style="display:flex;gap:12px;padding:40px 40px 24px">
+            <p style="margin:0;color:#4b5563;font-size:15px;line-height:1.6">
+              Looks lovely, doesn't it? Now click through those client tabs. ☝️
+              Outlook is about to soften these rounded corners — by deleting them —
+              and flatten this flexbox like it's 2007. Because for Word, it is. 💀
+            </p>
+          </td></tr>
+
+          <tr><td style="padding:0 40px 24px">
+            <p style="margin:0;color:#4b5563;font-size:15px;line-height:1.6">
+              Paste your own HTML in the editor on the left. Every declaration is
+              checked against real Can I Email support data, and anything a client
+              strips shows up below with the reason and a link to the evidence.
+            </p>
+          </td></tr>
+
+          <tr><td align="center" style="padding:0 40px 32px">
+            <a href="https://www.caniemail.com" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 28px;display:inline-block;font-size:15px;font-weight:bold">
+              Browse the support data
+            </a>
+          </td></tr>
+
+          <tr><td style="padding:0 40px">
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:0">
+          </td></tr>
+
+          <tr><td style="padding:28px 40px">
+            <h3 style="margin:0 0 14px;font-size:16px;color:#111827">What this tool checks</h3>
+            <p style="margin:0 0 10px;color:#4b5563;font-size:14px;line-height:1.6">
+              <strong style="color:#111827">Unsupported CSS</strong> — declarations each client
+              quietly drops, matched per property and per value.
+            </p>
+            <p style="margin:0 0 10px;color:#4b5563;font-size:14px;line-height:1.6">
+              <strong style="color:#111827">Rendering quirks</strong> — the Word engine ignoring
+              media queries, Gmail clipping past 102&nbsp;KB, and friends.
+            </p>
+            <p style="margin:0;color:#4b5563;font-size:14px;line-height:1.6">
+              <strong style="color:#111827">Dark mode</strong> — which clients honour your styles
+              and which invert your colours for you, whether you asked or not.
+            </p>
+          </td></tr>
+
+          <tr><td style="padding:0 40px 32px">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="padding:8px">
+                  <strong style="font-size:20px;color:#2563eb">5</strong><br>
+                  <span style="font-size:13px;color:#6b7280">Clients simulated</span>
+                </td>
+                <td align="center" style="padding:8px">
+                  <strong style="font-size:20px;color:#2563eb">6</strong><br>
+                  <span style="font-size:13px;color:#6b7280">Pipeline stages</span>
+                </td>
+                <td align="center" style="padding:8px">
+                  <strong style="font-size:20px;color:#2563eb">0</strong><br>
+                  <span style="font-size:13px;color:#6b7280">Emails actually sent</span>
+                </td>
+              </tr>
+            </table>
+          </td></tr>
+
+          <tr><td align="center" style="background:#f9fafb;padding:24px 40px">
+            <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6">
+              No account, no tracking pixel, no "click here to view in browser".<br>
+              Everything runs locally in your browser.
+            </p>
           </td></tr>
         </table>
       </td></tr>
@@ -69,6 +132,20 @@ const SEVERITY: Record<Mutation['severity'], { dot: string; badge: string; label
 
 function shortName(id: ClientId): string {
   return PROFILES[id].name.split(' (')[0];
+}
+
+/**
+ * Identity of a distinct issue. Occurrences of the same feature are collapsed
+ * into one row, but a differing action or severity stays separate — merging
+ * those would hide genuinely different findings.
+ */
+const issueKey = (m: Mutation) => `${m.feature}|${m.action}|${m.severity}`;
+
+/** Distinct issues at a severity — not raw occurrences, so counts don't inflate. */
+function distinctCount(muts: Mutation[], severity: Severity): number {
+  const keys = new Set<string>();
+  for (const m of muts) if (m.severity === severity) keys.add(issueKey(m));
+  return keys.size;
 }
 
 type PreviewScheme = 'light' | 'dark';
@@ -124,52 +201,86 @@ function Segmented<T extends string>({
   );
 }
 
-function IssueRow({ m, onSelect }: { m: Mutation; onSelect: () => void }) {
-  const sev = SEVERITY[m.severity];
+/**
+ * One row per DISTINCT issue. The same feature hit at 15 source locations is a
+ * single row with 15 jump-to chips, not 15 copies of the same explanation —
+ * otherwise the genuinely different problems drown in repetition.
+ */
+function IssueRow({ items, onSelect }: { items: Mutation[]; onSelect: (m: Mutation) => void }) {
+  const head = items[0];
+  const sev = SEVERITY[head.severity];
+  const located = items.filter((m) => m.target.loc);
+
+  // Only show a property/value in the header when every occurrence agrees;
+  // otherwise the header would misrepresent the other occurrences.
+  const properties = new Set(items.map((m) => m.target.property).filter(Boolean));
+  const values = new Set(items.map((m) => m.target.value).filter(Boolean));
+  const property = properties.size === 1 ? [...properties][0] : undefined;
+  const value = property && values.size === 1 ? [...values][0] : undefined;
+  const elements = new Set(items.map((m) => m.target.element).filter(Boolean));
+  const element = !property && elements.size === 1 ? [...elements][0] : undefined;
+
   return (
-    <li>
-      <button
-        onClick={onSelect}
-        className="group block w-full px-3 py-2.5 text-left transition-colors hover:bg-black/3 dark:hover:bg-white/3"
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset ${sev.badge}`}>
-            {sev.label}
-          </span>
-          <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-(--fg-muted) dark:bg-white/10">
-            {m.action}
+    <li className="px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset ${sev.badge}`}>
+          {sev.label}
+        </span>
+        <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-(--fg-muted) dark:bg-white/10">
+          {head.action}
+        </code>
+        {property && (
+          <code className="font-mono text-[11px] text-(--fg-muted)">
+            {property}
+            {value ? `: ${value}` : ''}
           </code>
-          {m.target.property && (
-            <code className="font-mono text-[11px] text-(--fg-muted)">
-              {m.target.property}
-              {m.target.value ? `: ${m.target.value}` : ''}
-            </code>
-          )}
-          {m.target.element && !m.target.property && (
-            <code className="font-mono text-[11px] text-(--fg-muted)">&lt;{m.target.element}&gt;</code>
-          )}
-          {m.target.loc && (
-            <span className="ml-auto font-mono text-[10px] text-(--fg-muted) group-hover:text-sky-500">
-              L{m.target.loc.startLine}:{m.target.loc.startCol}
-            </span>
-          )}
-        </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-(--fg)/80">{m.reason}</p>
-        {m.fix && (
-          <p className="mt-1 text-[11px] leading-relaxed text-(--fg-muted)">
-            <span className="font-semibold">Fix:</span> {m.fix}
-          </p>
         )}
-        <a
-          href={m.evidence}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="mt-1 inline-block text-[11px] font-medium text-sky-600 hover:underline dark:text-sky-400"
-        >
-          {m.feature} ↗
-        </a>
-      </button>
+        {element && (
+          <code className="font-mono text-[11px] text-(--fg-muted)">&lt;{element}&gt;</code>
+        )}
+        {items.length > 1 && (
+          <span className="ml-auto rounded-full bg-(--surface-tint) px-1.5 text-[10px] font-semibold text-(--fg-muted)">
+            {items.length}×
+          </span>
+        )}
+      </div>
+
+      <p className="mt-1.5 text-xs leading-relaxed text-(--fg)/80">{head.reason}</p>
+      {head.fix && (
+        <p className="mt-1 text-[11px] leading-relaxed text-(--fg-muted)">
+          <span className="font-semibold">Fix:</span> {head.fix}
+        </p>
+      )}
+
+      {located.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {located.map((m, i) => (
+            <button
+              key={i}
+              onClick={() => onSelect(m)}
+              title={
+                m.target.property
+                  ? `${m.target.property}${m.target.value ? `: ${m.target.value}` : ''}`
+                  : m.target.element
+                    ? `<${m.target.element}>`
+                    : undefined
+              }
+              className="rounded bg-(--surface-tint) px-1.5 py-0.5 font-mono text-[10px] text-(--fg-muted) transition-colors hover:text-sky-500"
+            >
+              L{m.target.loc!.startLine}:{m.target.loc!.startCol}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <a
+        href={head.evidence}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1 inline-block text-[11px] font-medium text-sky-600 hover:underline dark:text-sky-400"
+      >
+        {head.feature} ↗
+      </a>
     </li>
   );
 }
@@ -212,21 +323,35 @@ export default function Studio() {
   }, [debounced, renderCtx]);
 
   const result = results[active];
-  const counts = useMemo(() => {
-    const c = { error: 0, warning: 0, info: 0 };
-    for (const m of result.mutations) c[m.severity]++;
-    return c;
-  }, [result]);
+  const counts = useMemo(
+    () => ({
+      error: distinctCount(result.mutations, 'error'),
+      warning: distinctCount(result.mutations, 'warning'),
+      info: distinctCount(result.mutations, 'info'),
+    }),
+    [result],
+  );
 
-  // Group the active client's mutations by pipeline stage, in pipeline order.
+  // Group by pipeline stage, then collapse repeated occurrences of the same
+  // issue within each stage. Mutations arrive pre-sorted, so Map insertion
+  // order keeps both levels deterministic.
   const groups = useMemo(() => {
-    const byStage = new Map<MutationStage, Mutation[]>();
+    const byStage = new Map<MutationStage, Map<string, Mutation[]>>();
     for (const m of result.mutations) {
-      const list = byStage.get(m.stage);
+      let stage = byStage.get(m.stage);
+      if (!stage) {
+        stage = new Map();
+        byStage.set(m.stage, stage);
+      }
+      const key = issueKey(m);
+      const list = stage.get(key);
       if (list) list.push(m);
-      else byStage.set(m.stage, [m]);
+      else stage.set(key, [m]);
     }
-    return STAGE_ORDER.filter((s) => byStage.has(s)).map((s) => ({ stage: s, items: byStage.get(s)! }));
+    return STAGE_ORDER.filter((s) => byStage.has(s)).map((s) => ({
+      stage: s,
+      issues: [...byStage.get(s)!.entries()].map(([key, items]) => ({ key, items })),
+    }));
   }, [result]);
 
   // Outlook/Win never switches to dark — surface that instead of a fake preview.
@@ -268,7 +393,7 @@ export default function Studio() {
         <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">
           <HugeiconsIcon icon={Mail01Icon} size={14} strokeWidth={2} />
         </div>
-        <h1 className="text-sm font-semibold tracking-tight">Email Renderer</h1>
+        <h1 className="text-sm font-semibold tracking-tight">Mail Check</h1>
         <span className="hidden text-xs text-(--fg-muted) sm:inline">
           See how each client mangles your HTML — and why.
         </span>
@@ -307,10 +432,11 @@ export default function Studio() {
               // Badge shows the count of the WORST severity present, colored to
               // match — not the total mutation count. Otherwise a client with 90
               // informational notes and 1 real error reads as "91 errors" (red).
-              const errs = res.mutations.filter((m) => m.severity === 'error').length;
-              const warns = res.mutations.filter((m) => m.severity === 'warning').length;
+              const errs = distinctCount(res.mutations, 'error');
+              const warns = distinctCount(res.mutations, 'warning');
               const worst: Severity = errs > 0 ? 'error' : warns > 0 ? 'warning' : 'info';
-              const badgeCount = errs > 0 ? errs : warns > 0 ? warns : res.mutations.length;
+              const badgeCount =
+                errs > 0 ? errs : warns > 0 ? warns : distinctCount(res.mutations, 'info');
               const isActive = active === id;
               return (
                 <button
@@ -428,12 +554,12 @@ export default function Studio() {
                       {STAGE_LABELS[g.stage]}
                     </span>
                     <span className="rounded-full bg-(--surface-tint) px-1.5 text-[10px] font-semibold text-(--fg-muted)">
-                      {g.items.length}
+                      {g.issues.length}
                     </span>
                   </div>
                   <ul className="divide-y divide-(--border-soft)">
-                    {g.items.map((m, i) => (
-                      <IssueRow key={i} m={m} onSelect={() => scrollToLoc(m)} />
+                    {g.issues.map((iss) => (
+                      <IssueRow key={iss.key} items={iss.items} onSelect={scrollToLoc} />
                     ))}
                   </ul>
                 </section>

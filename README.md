@@ -1,4 +1,4 @@
-# Email Renderer
+# Mail Check
 
 A preview tool that simulates how a user's email HTML renders across the major
 email clients (Gmail, Outlook Windows/Word engine, Outlook.com, Apple Mail,
