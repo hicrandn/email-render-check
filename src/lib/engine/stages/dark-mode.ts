@@ -12,7 +12,19 @@ import type { Declaration } from 'postcss';
 import type { SourceLocation } from '../types';
 import type { StageContext } from './context';
 import type { ParsedDeclaration, RemoveToken, StyleSheet } from '../parse/css';
-import { walkElements, elementLoc, getAttr, isTextNode, type Element, type Node } from '../parse/html';
+import {
+  walkElements,
+  elementLoc,
+  getAttr,
+  isTextNode,
+  findElement,
+  buildStyleNode,
+  prependChild,
+  type Element,
+  type Node,
+  type ChildNode,
+  type ParentNode,
+} from '../parse/html';
 import { contrastRatio, flipLightness, parseColor } from '../color';
 
 const PREFERS_DARK_DOC =
@@ -100,6 +112,26 @@ function hasOgsc(ctx: StageContext): boolean {
     if (found) return true;
   }
   return false;
+}
+
+/**
+ * Hint the document's own default background via CSS `color-scheme`. This is
+ * what makes a browser/WebKit-based client's UA-default background (and
+ * scrollbars/form controls) render light or dark wherever the author hasn't
+ * declared their own background — not an author-visible mutation, just an
+ * explicit declaration of the scheme the simulated client actually renders
+ * under. Called for EVERY render (light included) so nothing is left to the
+ * host browser's own default; the engine owns the whole rendering, not just
+ * the dark half of it.
+ */
+function hintColorScheme(ctx: StageContext, scheme: 'light' | 'dark'): void {
+  const doc = ctx.parsed.document;
+  const host: ParentNode =
+    findElement(doc, 'head') ?? findElement(doc, 'body') ?? findElement(doc, 'html') ?? doc;
+  const style = buildStyleNode(`:root{color-scheme:${scheme}}`, [
+    { name: 'data-color-scheme-hint', value: ctx.clientId },
+  ]);
+  prependChild(host, style as unknown as ChildNode);
 }
 
 function hasColorSchemeMeta(ctx: StageContext): boolean {
@@ -274,10 +306,18 @@ function flagImageInversion(ctx: StageContext): void {
 // --- entry point ------------------------------------------------------------
 
 export function runDarkMode(ctx: StageContext): void {
-  if (ctx.render.colorScheme !== 'dark') return;
   const dm = ctx.profile.darkMode;
 
+  // Light is not "do nothing" — it is the engine explicitly declaring the
+  // client renders light, same as the dark branches below declare dark.
+  if (ctx.render.colorScheme === 'light') {
+    hintColorScheme(ctx, 'light');
+    return;
+  }
+
   if (dm.strategy === 'unsupported') {
+    // Renders light even under a dark OS setting — declare that explicitly too.
+    hintColorScheme(ctx, 'light');
     ctx.mutations.push({
       client: ctx.clientId,
       stage: 'dark-mode',
@@ -292,6 +332,10 @@ export function runDarkMode(ctx: StageContext): void {
     });
     return;
   }
+
+  // Every other strategy renders under a dark OS setting, so the client's own
+  // default background goes dark regardless of what the author declared.
+  hintColorScheme(ctx, 'dark');
 
   const media = collectPrefersDark(ctx);
 
