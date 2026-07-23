@@ -1,9 +1,18 @@
 'use client';
 
-import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import dynamic from 'next/dynamic';
 import { simulate } from '@/src/lib/engine/engine';
 import { PROFILES } from '@/src/lib/engine/profiles';
+import { snapshot } from '@/src/lib/engine/data/snapshot';
 import {
   CLIENT_IDS,
   type ClientId,
@@ -43,7 +52,7 @@ const SAMPLE = `<!doctype html>
           <tr><td class="card" style="display:flex;gap:12px;padding:36px 40px 24px">
             <p style="margin:0;color:#4b5563;font-size:15px;line-height:1.6">
               Click through the client tabs. Outlook is about to soften these rounded
-              corners — by deleting them — and flatten this flexbox like it's 2007.
+              corners by deleting them and flatten this flexbox like it's 2007.
               Paste your own HTML on the left: every declaration a client drops shows
               up below with the reason and a link to the evidence.
             </p>
@@ -90,6 +99,35 @@ const SEVERITY: Record<Mutation['severity'], { dot: string; badge: string; label
 
 function shortName(id: ClientId): string {
   return PROFILES[id].name.split(' (')[0];
+}
+
+/**
+ * The result of simulating one client, plus an error if it threw. Pathological
+ * input (e.g. thousands of levels of nesting) can blow the call stack inside
+ * `simulate()` — the engine can't fully guard against that (parse5's own
+ * serializer is recursive too), so the UI treats it as a per-client failure
+ * instead of letting the whole page crash.
+ */
+interface ClientResult {
+  result: SimulationResult;
+  error?: string;
+}
+
+function simulateSafe(html: string, id: ClientId, ctx: RenderContext): ClientResult {
+  try {
+    return { result: simulate(html, id, ctx) };
+  } catch (e) {
+    return {
+      result: { clientId: id, html: '', mutations: [] },
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/** requestIdleCallback isn't available in every engine (e.g. Safari) — fall back to a macrotask. */
+function scheduleIdle(cb: () => void): void {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(cb);
+  else setTimeout(cb, 0);
 }
 
 /**
@@ -273,14 +311,41 @@ export default function Studio() {
     [previewScheme, device],
   );
 
-  // Analyze every client once per (debounced input × context); tab switches are instant.
-  const results = useMemo(() => {
-    const out = {} as Record<ClientId, SimulationResult>;
-    for (const id of CLIENT_IDS) out[id] = simulate(debounced, id, renderCtx);
-    return out;
-  }, [debounced, renderCtx]);
+  // The active client is simulated synchronously — it's the only one the
+  // interactive typing path needs right away. The other 4 (needed only for
+  // the tab badge counts) are computed off that path, one at a time during
+  // idle time, so a large email doesn't block every keystroke on 5x the work.
+  const activeResult = useMemo(
+    () => simulateSafe(debounced, active, renderCtx),
+    [debounced, active, renderCtx],
+  );
+  const [backgroundResults, setBackgroundResults] = useState<Partial<Record<ClientId, ClientResult>>>({});
 
-  const result = results[active];
+  useEffect(() => {
+    let cancelled = false;
+    const others = CLIENT_IDS.filter((id) => id !== active);
+
+    function step(i: number) {
+      if (cancelled || i >= others.length) return;
+      const id = others[i];
+      const r = simulateSafe(debounced, id, renderCtx);
+      if (!cancelled) setBackgroundResults((prev) => ({ ...prev, [id]: r }));
+      scheduleIdle(() => step(i + 1));
+    }
+    step(0);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debounced, renderCtx, active]);
+
+  // Active client always has a fresh result; the other 4 fill in progressively.
+  const results: Partial<Record<ClientId, ClientResult>> = {
+    ...backgroundResults,
+    [active]: activeResult,
+  };
+  const result = activeResult.result;
+  const activeError = activeResult.error;
   const counts = useMemo(
     () => ({
       error: distinctCount(result.mutations, 'error'),
@@ -343,6 +408,21 @@ export default function Studio() {
       // pointer already released
     }
   }
+  function onDividerKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+    const step = 4;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      setPreviewPct((pct) => Math.max(15, pct - step));
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      setPreviewPct((pct) => Math.min(85, pct + step));
+    } else if (e.key === 'Home') {
+      setPreviewPct(15);
+    } else if (e.key === 'End') {
+      setPreviewPct(85);
+    } else {
+      return;
+    }
+    e.preventDefault();
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-(--canvas) text-(--fg)">
@@ -354,6 +434,9 @@ export default function Studio() {
         <h1 className="text-sm font-semibold tracking-tight">Mail Check</h1>
         <span className="hidden text-xs text-(--fg-muted) sm:inline">
           See how each client mangles your HTML — and why.
+        </span>
+        <span className="ml-auto hidden shrink-0 text-[10px] text-(--fg-muted)/70 sm:inline">
+          Compatibility data as of {snapshot.lastUpdate.split(' ')[0]}
         </span>
       </header>
 
@@ -383,22 +466,28 @@ export default function Studio() {
         {/* ---- Preview + issues pane ---- */}
         <section className="flex min-h-0 flex-1 min-w-0 flex-col">
           {/* Client tabs + preview view controls (device / light-dark) */}
-          <nav className="flex shrink-0 items-center gap-2 border-b border-(--border) bg-(--panel) px-2 py-1.5">
+          <nav
+            role="tablist"
+            aria-label="Email client"
+            className="flex shrink-0 items-center gap-2 border-b border-(--border) bg-(--panel) px-2 py-1.5"
+          >
             <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {CLIENT_IDS.map((id) => {
               const res = results[id];
+              const isActive = active === id;
               // Badge shows the count of the WORST severity present, colored to
               // match — not the total mutation count. Otherwise a client with 90
               // informational notes and 1 real error reads as "91 errors" (red).
-              const errs = distinctCount(res.mutations, 'error');
-              const warns = distinctCount(res.mutations, 'warning');
+              const errs = res ? distinctCount(res.result.mutations, 'error') : 0;
+              const warns = res ? distinctCount(res.result.mutations, 'warning') : 0;
               const worst: Severity = errs > 0 ? 'error' : warns > 0 ? 'warning' : 'info';
               const badgeCount =
-                errs > 0 ? errs : warns > 0 ? warns : distinctCount(res.mutations, 'info');
-              const isActive = active === id;
+                errs > 0 ? errs : warns > 0 ? warns : res ? distinctCount(res.result.mutations, 'info') : 0;
               return (
                 <button
                   key={id}
+                  role="tab"
+                  aria-selected={isActive}
                   onClick={() => setActive(id)}
                   className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     isActive
@@ -407,7 +496,15 @@ export default function Studio() {
                   }`}
                 >
                   {shortName(id)}
-                  {res.mutations.length > 0 && (
+                  {res?.error && (
+                    <span
+                      title={res.error}
+                      className="rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white"
+                    >
+                      !
+                    </span>
+                  )}
+                  {!res?.error && res && res.result.mutations.length > 0 && (
                     <span
                       className={`rounded-full px-1.5 text-[10px] font-semibold ${
                         worst === 'error'
@@ -463,21 +560,37 @@ export default function Studio() {
               style={{ maxWidth: DEVICE_WIDTH[device] }}
               className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg shadow-xl ring-1 ring-(--preview-frame-ring) transition-[max-width] "
             >
-              <iframe
-                title={`${active} preview`}
-                sandbox=""
-                srcDoc={result.html}
-                className="min-h-0 w-full flex-1 border-0"
-              />
+              {activeError ? (
+                <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1 bg-(--panel) p-6 text-center">
+                  <span className="text-xl">⚠️</span>
+                  <p className="text-xs text-(--fg-muted)">
+                    Couldn&apos;t render this HTML for {shortName(active)} — see the note below.
+                  </p>
+                </div>
+              ) : (
+                <iframe
+                  title={`${active} preview`}
+                  sandbox=""
+                  srcDoc={result.html}
+                  className="min-h-0 w-full flex-1 border-0"
+                />
+              )}
             </div>
           </div>
 
           {/* Draggable divider */}
           <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-valuenow={Math.round(previewPct)}
+            aria-valuemin={15}
+            aria-valuemax={85}
+            tabIndex={0}
             onPointerDown={onDividerDown}
             onPointerMove={onDividerMove}
             onPointerUp={onDividerUp}
-            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-(--border) bg-(--panel-2) hover:bg-black/4 dark:hover:bg-white/6"
+            onKeyDown={onDividerKeyDown}
+            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-(--border) bg-(--panel-2) hover:bg-black/4 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:hover:bg-white/6"
           >
             <span className="h-0.5 w-8 rounded-full bg-(--border) group-hover:bg-(--fg-muted)" />
           </div>
@@ -505,30 +618,43 @@ export default function Studio() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-auto">
-              {groups.map((g) => (
-                <section key={g.stage}>
-                  <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-(--border-soft) bg-(--panel-2) px-3 py-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-(--fg-muted)">
-                      {STAGE_LABELS[g.stage]}
-                    </span>
-                    <span className="rounded-full bg-(--surface-tint) px-1.5 text-[10px] font-semibold text-(--fg-muted)">
-                      {g.issues.length}
-                    </span>
-                  </div>
-                  <ul className="divide-y divide-(--border-soft)">
-                    {g.issues.map((iss) => (
-                      <IssueRow key={iss.key} items={iss.items} onSelect={scrollToLoc} />
-                    ))}
-                  </ul>
-                </section>
-              ))}
-              {result.mutations.length === 0 && (
+              {activeError ? (
                 <div className="flex flex-col items-center justify-center gap-1 px-3 py-10 text-center">
-                  <span className="text-2xl">🎉</span>
-                  <p className="text-xs text-(--fg-muted)">
-                    No incompatibilities for {shortName(active)}.
+                  <span className="text-2xl">⚠️</span>
+                  <p className="max-w-xs text-xs text-(--fg-muted)">
+                    This HTML is too deeply nested to analyze for {shortName(active)} — try
+                    flattening the markup.
                   </p>
+                  <p className="mt-1 max-w-xs font-mono text-[10px] text-(--fg-muted)/70">{activeError}</p>
                 </div>
+              ) : (
+                <>
+                  {groups.map((g) => (
+                    <section key={g.stage}>
+                      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-(--border-soft) bg-(--panel-2) px-3 py-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-(--fg-muted)">
+                          {STAGE_LABELS[g.stage]}
+                        </span>
+                        <span className="rounded-full bg-(--surface-tint) px-1.5 text-[10px] font-semibold text-(--fg-muted)">
+                          {g.issues.length}
+                        </span>
+                      </div>
+                      <ul className="divide-y divide-(--border-soft)">
+                        {g.issues.map((iss) => (
+                          <IssueRow key={iss.key} items={iss.items} onSelect={scrollToLoc} />
+                        ))}
+                      </ul>
+                    </section>
+                  ))}
+                  {result.mutations.length === 0 && (
+                    <div className="flex flex-col items-center justify-center gap-1 px-3 py-10 text-center">
+                      <span className="text-2xl">🎉</span>
+                      <p className="text-xs text-(--fg-muted)">
+                        No incompatibilities for {shortName(active)}.
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

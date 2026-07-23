@@ -34,16 +34,27 @@ export function isTextNode(node: Node): node is TextNode {
   return defaultTreeAdapter.isTextNode(node);
 }
 
-/** Depth-first walk over all element nodes. Visited in document order. */
+/**
+ * Depth-first walk over all element nodes, visited in document order.
+ * Iterative (explicit stack) rather than recursive — real emails can nest
+ * deeply enough (thousands of levels) to blow the call stack otherwise.
+ */
 export function walkElements(
   root: ParentNode,
   visit: (el: Element, parent: ParentNode) => void,
 ): void {
-  const children = root.childNodes ?? [];
-  for (const child of children) {
-    if (isElement(child)) {
-      visit(child, root);
-      walkElements(child, visit);
+  const stack: { node: ChildNode; parent: ParentNode }[] = [];
+  const rootChildren = root.childNodes ?? [];
+  for (let i = rootChildren.length - 1; i >= 0; i--) {
+    stack.push({ node: rootChildren[i], parent: root });
+  }
+  while (stack.length > 0) {
+    const { node, parent } = stack.pop()!;
+    if (!isElement(node)) continue;
+    visit(node, parent);
+    const children = node.childNodes ?? [];
+    for (let i = children.length - 1; i >= 0; i--) {
+      stack.push({ node: children[i], parent: node });
     }
   }
 }

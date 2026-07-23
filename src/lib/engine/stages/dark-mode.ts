@@ -42,13 +42,21 @@ const AA_NORMAL = 4.5;
 const DEFAULT_TEXT = '#000000';
 const DEFAULT_BG = '#ffffff';
 
-/** True if the element directly or transitively contains non-whitespace text. */
+/**
+ * True if the element directly or transitively contains non-whitespace text.
+ * Iterative (explicit stack) — deeply nested markup can otherwise blow the
+ * call stack, same reasoning as `walkElements` in parse/html.ts.
+ */
 function hasTextContent(node: Node): boolean {
-  const children = (node as { childNodes?: Node[] }).childNodes;
-  if (!children) return false;
-  for (const child of children) {
-    if (isTextNode(child) && child.value.trim().length > 0) return true;
-    if (hasTextContent(child)) return true;
+  const stack: Node[] = [node];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    const children = (current as { childNodes?: Node[] }).childNodes;
+    if (!children) continue;
+    for (const child of children) {
+      if (isTextNode(child) && child.value.trim().length > 0) return true;
+      stack.push(child);
+    }
   }
   return false;
 }
