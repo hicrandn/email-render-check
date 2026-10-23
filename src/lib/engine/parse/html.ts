@@ -11,6 +11,7 @@ export type TextNode = DefaultTreeAdapterMap['textNode'];
 export type ChildNode = DefaultTreeAdapterMap['childNode'];
 export type ParentNode = DefaultTreeAdapterMap['parentNode'];
 export type Attribute = Element['attrs'][number];
+export type DocumentType = DefaultTreeAdapterMap['documentType'];
 
 export interface ParsedHtml {
   document: DefaultTreeAdapterMap['document'];
@@ -101,7 +102,7 @@ function toSourceLocation(loc: {
   };
 }
 
-export function elementLoc(el: Element): SourceLocation | undefined {
+export function elementLoc(el: Element | DocumentType): SourceLocation | undefined {
   const loc = el.sourceCodeLocation;
   if (!loc) return undefined;
   return toSourceLocation(loc);

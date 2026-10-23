@@ -14,6 +14,7 @@ import {
   attrLoc,
   getAttr,
   type Attribute,
+  type DocumentType,
   type Element,
   type ParentNode,
   type ChildNode,
@@ -25,24 +26,29 @@ const ELEMENT_SLUG: Record<string, string> = {
   abbr: 'html-abbr',
   acronym: 'html-acronym',
   address: 'html-address',
+  area: 'html-image-maps',
   audio: 'html-audio',
   base: 'html-base',
   bdi: 'html-bdi',
   blockquote: 'html-blockquote',
+  body: 'html-body',
   code: 'html-code',
   del: 'html-del',
   dfn: 'html-dfn',
   dialog: 'html-dialog',
   div: 'html-div',
+  dl: 'html-lists',
   form: 'html-form',
   h1: 'html-h1-h6', h2: 'html-h1-h6', h3: 'html-h1-h6',
   h4: 'html-h1-h6', h5: 'html-h1-h6', h6: 'html-h1-h6',
   hr: 'html-hr',
   img: 'html-img',
   link: 'html-link',
+  map: 'html-image-maps',
   marquee: 'html-marquee',
   meter: 'html-meter',
   object: 'html-object',
+  ol: 'html-lists',
   p: 'html-p',
   picture: 'html-picture',
   pre: 'html-pre',
@@ -55,12 +61,22 @@ const ELEMENT_SLUG: Record<string, string> = {
   span: 'html-span',
   strike: 'html-strike',
   strong: 'html-strong',
+  style: 'html-style',
   svg: 'html-svg',
   table: 'html-table',
   textarea: 'html-textarea',
+  ul: 'html-lists',
   video: 'html-video',
   wbr: 'html-wbr',
 };
+
+// HTML5 sectioning and semantic elements: one caniemail entry for all of them.
+for (const tag of [
+  'article', 'aside', 'details', 'figcaption', 'figure', 'footer', 'header',
+  'main', 'nav', 'section', 'summary', 'time',
+]) {
+  ELEMENT_SLUG[tag] = 'html-semantics';
+}
 
 /** <input> has one caniemail entry per type; other types fall back to text. */
 const INPUT_TYPE_SLUG: Record<string, string> = {
@@ -88,7 +104,7 @@ const SECURITY_ALWAYS = new Set(['script', 'iframe', 'embed']);
 /** When caniemail marks these unsupported, remove the whole subtree (not unwrap). */
 const REMOVE_WHEN_UNSUPPORTED = new Set([
   'form', 'input', 'select', 'textarea', 'button', 'video', 'audio', 'svg', 'dialog',
-  'link', 'base', 'object',
+  'link', 'base', 'object', 'style', 'map', 'area',
 ]);
 
 /** Attributes with their own caniemail entry. */
@@ -134,7 +150,7 @@ function attributeSlug(el: Element, attr: Attribute): string | undefined {
 }
 
 /** Structural elements the engine must never touch. */
-const NEVER_TOUCH = new Set(['html', 'head', 'body', 'style']);
+const NEVER_TOUCH = new Set(['html', 'head']);
 
 function mdnEvidence(tag: string): string {
   return `https://developer.mozilla.org/en-US/docs/Web/HTML/Element/${tag}`;
@@ -184,6 +200,7 @@ interface Op {
 export function runSanitize(ctx: StageContext): void {
   const { clientId, parsed } = ctx;
   const ops: Op[] = [];
+  checkDoctype(ctx);
 
   walkElements(parsed.document, (el) => {
     const tag = el.tagName;
@@ -275,6 +292,37 @@ export function runSanitize(ctx: StageContext): void {
         evidence: feature.url,
       });
     }
+  });
+}
+
+/**
+ * caniemail's one document-level entry: the HTML5 doctype (`<!DOCTYPE html>`,
+ * no public id). It is only reported, never removed: without a doctype the
+ * preview browser would switch to quirks mode, which no email client does.
+ */
+function checkDoctype(ctx: StageContext): void {
+  const doctype = ctx.parsed.document.childNodes.find(
+    (n): n is DocumentType => n.nodeName === '#documentType',
+  );
+  if (!doctype || doctype.name.toLowerCase() !== 'html' || doctype.publicId) return;
+  const feature = featureBySlug.get('html-doctype');
+  if (!feature) return;
+  const support = feature.support[ctx.clientId];
+  if (support.status !== 'n' && support.status !== 'a') return;
+  ctx.mutations.push({
+    client: ctx.clientId,
+    stage: 'sanitize',
+    action: 'warn-only',
+    target: { element: '!doctype', loc: elementLoc(doctype) },
+    feature: 'html-doctype',
+    severity: 'warning',
+    reason:
+      (support.status === 'n'
+        ? `${ctx.profile.name} does not support the HTML5 doctype; it has no effect on ` +
+          `how the email renders.`
+        : `${ctx.profile.name} has partial support for the HTML5 doctype.`) +
+      appendNotes(support.notes),
+    evidence: feature.url,
   });
 }
 

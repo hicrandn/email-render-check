@@ -315,3 +315,34 @@ describe('sanitize: attributes', () => {
     expect(byFeature(simulate('<a href="https://example.com/">x</a>', 'yahoo').mutations, 'html-anchor-links')).toHaveLength(0);
   });
 });
+
+describe('sanitize: semantics, lists, style, doctype', () => {
+  it('unwraps <section> in outlook-win and keeps its content', () => {
+    const { html: out, mutations } = simulate('<section><p>x</p></section>', 'outlook-win');
+    expect(byFeature(mutations, 'html-semantics')[0].action).toBe('unwrap-element');
+    expect(out).not.toContain('<section');
+    expect(out).toContain('<p>x</p>');
+  });
+
+  it('warns on <section> in gmail (partial)', () => {
+    expect(byFeature(simulate('<section>x</section>', 'gmail').mutations, 'html-semantics')[0].action)
+      .toBe('warn-only');
+  });
+
+  it('warns on lists where support is partial', () => {
+    expect(byFeature(simulate('<ul><li>x</li></ul>', 'gmail').mutations, 'html-lists')).toHaveLength(1);
+    expect(byFeature(simulate('<ul><li>x</li></ul>', 'apple-mail').mutations, 'html-lists')).toHaveLength(0);
+  });
+
+  it('warns on <style> in gmail and keeps it', () => {
+    const { html: out, mutations } = simulate('<style>p{color:red}</style><p>x</p>', 'gmail');
+    expect(byFeature(mutations, 'html-style')[0].action).toBe('warn-only');
+    expect(out).toContain('p{color:red}');
+  });
+
+  it('reports the HTML5 doctype in outlook-win without removing it', () => {
+    const { html: out, mutations } = simulate('<!DOCTYPE html><p>x</p>', 'outlook-win');
+    expect(byFeature(mutations, 'html-doctype')[0].action).toBe('warn-only');
+    expect(out).toMatch(/^<!DOCTYPE html>/);
+  });
+});
