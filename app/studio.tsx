@@ -46,6 +46,8 @@ const SEVERITY: Record<Mutation['severity'], { dot: string; label: string }> = {
   info: { dot: 'bg-sky-500', label: 'Info' },
 };
 
+const SEVERITY_RANK: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
+
 // What the client did, in words; the engine's action ids are internal.
 const ACTION_LABEL: Record<Mutation['action'], string> = {
   'remove-property': 'Removed',
@@ -362,8 +364,10 @@ export default function Studio() {
   );
 
   // Group by pipeline stage, then collapse repeated occurrences of the same
-  // issue within each stage. Mutations arrive pre-sorted, so Map insertion
-  // order keeps both levels deterministic.
+  // issue within each stage. Errors come first: inside a stage, issues are
+  // ordered by severity, and stages by the worst severity they contain.
+  // Mutations arrive pre-sorted and Array#sort is stable, so ties keep
+  // source order (within a stage) and pipeline order (between stages).
   const groups = useMemo(() => {
     const byStage = new Map<MutationStage, Map<string, Mutation[]>>();
     for (const m of result.mutations) {
@@ -377,10 +381,14 @@ export default function Studio() {
       if (list) list.push(m);
       else stage.set(key, [m]);
     }
-    return STAGE_ORDER.filter((s) => byStage.has(s)).map((s) => ({
-      stage: s,
-      issues: [...byStage.get(s)!.entries()].map(([key, items]) => ({ key, items })),
-    }));
+    return STAGE_ORDER.filter((s) => byStage.has(s))
+      .map((s) => ({
+        stage: s,
+        issues: [...byStage.get(s)!.entries()]
+          .map(([key, items]) => ({ key, items }))
+          .sort((a, b) => SEVERITY_RANK[a.items[0].severity] - SEVERITY_RANK[b.items[0].severity]),
+      }))
+      .sort((a, b) => SEVERITY_RANK[a.issues[0].items[0].severity] - SEVERITY_RANK[b.issues[0].items[0].severity]);
   }, [result]);
 
   // Outlook/Win never switches to dark — surface that instead of a fake preview.
