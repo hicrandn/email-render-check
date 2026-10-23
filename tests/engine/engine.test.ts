@@ -375,3 +375,10 @@ describe('sanitize: image formats', () => {
     }
   });
 });
+
+describe('sanitize: implied elements', () => {
+  it('does not report a <body> the parser added', () => {
+    expect(byFeature(simulate('<p>x</p>', 'gmail').mutations, 'html-body')).toHaveLength(0);
+    expect(byFeature(simulate('<body><p>x</p></body>', 'gmail').mutations, 'html-body')).toHaveLength(1);
+  });
+});

@@ -255,6 +255,8 @@ export function runSanitize(ctx: StageContext): void {
   walkElements(parsed.document, (el) => {
     const tag = el.tagName;
     if (NEVER_TOUCH.has(tag)) return;
+    // Elements the parser implied (a missing <body>) are not the author's.
+    if (!el.sourceCodeLocation) return;
 
     // 1. Universal security removal.
     if (SECURITY_ALWAYS.has(tag)) {
