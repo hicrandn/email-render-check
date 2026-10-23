@@ -180,6 +180,34 @@ describe('dark mode: light context is a no-op', () => {
   });
 });
 
+describe('dark mode: prefers-color-scheme follows the simulated scheme, not the viewer', () => {
+  const html = `<style>
+    @media (prefers-color-scheme: dark) { p { color:#eeeeee; } }
+    @media (prefers-color-scheme: light) { p { color:#222222; } }
+  </style><p>x</p>`;
+
+  it('light render drops the dark block and applies the light one', () => {
+    const { html: out, mutations } = simulate(html, 'apple-mail', DEFAULT_CONTEXT);
+    expect(out).not.toContain('prefers-color-scheme');
+    expect(out).not.toContain('#eeeeee');
+    expect(out).toContain('#222222');
+    expect(mutations.filter((m) => m.stage === 'dark-mode')).toHaveLength(0);
+  });
+
+  it('dark render drops the light block and applies the dark one', () => {
+    const { html: out } = simulate(html, 'apple-mail', DARK);
+    expect(out).not.toContain('prefers-color-scheme');
+    expect(out).not.toContain('#222222');
+    expect(out).toContain('#eeeeee');
+  });
+
+  it('a client without dark mode renders the light block', () => {
+    const { html: out } = simulate(html, 'outlook-com', DEFAULT_CONTEXT);
+    expect(out).toContain('#222222');
+    expect(out).not.toContain('#eeeeee');
+  });
+});
+
 describe('dark mode: determinism', () => {
   it('same (html, client, dark ctx) yields byte-identical output three times', () => {
     const html =

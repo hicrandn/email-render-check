@@ -98,15 +98,39 @@ interface DarkMedia {
   at: import('postcss').AtRule;
 }
 
-function collectPrefersDark(ctx: StageContext): DarkMedia[] {
-  const out: DarkMedia[] = [];
+/**
+ * Settle the author's prefers-color-scheme blocks for the simulated scheme
+ * instead of leaving them in the output, where the preview browser would
+ * evaluate them against the viewer's own OS setting. Blocks for the other
+ * scheme are dropped; blocks for this scheme are returned for the caller to
+ * apply. Not logged: this is the simulated condition, not something the
+ * client did. (Blocks the client doesn't support are already gone: CSS filter.)
+ */
+function resolveSchemeMedia(ctx: StageContext, scheme: 'light' | 'dark'): DarkMedia[] {
+  const own: DarkMedia[] = [];
   for (const sheet of ctx.sheets) {
     if (sheet.source.kind !== 'block') continue;
+    const found: DarkMedia[] = [];
     sheet.root.walkAtRules('media', (at) => {
-      if (/prefers-color-scheme\s*:\s*dark/i.test(at.params)) out.push({ sheet, at });
+      if (/prefers-color-scheme\s*:\s*(light|dark)/i.test(at.params)) found.push({ sheet, at });
     });
+    for (const m of found) {
+      const forScheme = /prefers-color-scheme\s*:\s*dark/i.test(m.at.params) ? 'dark' : 'light';
+      if (forScheme === scheme) {
+        own.push(m);
+      } else {
+        m.at.remove();
+        sheet.dirty = true;
+      }
+    }
   }
-  return out;
+  return own;
+}
+
+/** Make a block's rules unconditional. */
+function hoist({ sheet, at }: DarkMedia): void {
+  at.replaceWith(...(at.nodes ?? []));
+  sheet.dirty = true;
 }
 
 function hasOgsc(ctx: StageContext): boolean {
@@ -168,8 +192,7 @@ function applyPrefersDark(ctx: StageContext, media: DarkMedia[], authorNote: str
         evidence: PREFERS_DARK_DOC,
       });
     });
-    at.replaceWith(...(at.nodes ?? []));
-    sheet.dirty = true;
+    hoist({ sheet, at });
   }
 }
 
@@ -371,11 +394,13 @@ export function runDarkMode(ctx: StageContext): void {
   const dm = ctx.profile.darkMode;
 
   if (ctx.render.colorScheme === 'light') {
+    resolveSchemeMedia(ctx, 'light').forEach(hoist);
     hintColorScheme(ctx, 'light');
     return;
   }
 
   if (dm.strategy === 'unsupported') {
+    resolveSchemeMedia(ctx, 'light').forEach(hoist);
     hintColorScheme(ctx, 'light');
     ctx.mutations.push({
       client: ctx.clientId,
@@ -398,7 +423,7 @@ export function runDarkMode(ctx: StageContext): void {
 
   // Blocks the client does not support were already removed by the CSS filter.
   const honorsPrefersDark = supportFor(PREFERS_DARK_SLUG, ctx.clientId).status !== 'n';
-  const media = collectPrefersDark(ctx);
+  const media = resolveSchemeMedia(ctx, 'dark');
   const ogsc = dm.supportsOgscHack && hasOgsc(ctx);
   if (ogsc) applyOgsc(ctx);
 
