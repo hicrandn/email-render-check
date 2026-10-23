@@ -107,6 +107,11 @@ export function elementLoc(el: Element): SourceLocation | undefined {
   return toSourceLocation(loc);
 }
 
+export function attrLoc(el: Element, name: string): SourceLocation | undefined {
+  const loc = el.sourceCodeLocation?.attrs?.[name];
+  return loc ? toSourceLocation(loc) : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Style-source collection: both <style> blocks and style="" attributes.
 // Each source records the absolute offset where its CSS text begins, so css.ts

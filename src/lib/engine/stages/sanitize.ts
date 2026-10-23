@@ -4,13 +4,16 @@
 //
 //   - default action for an unsupported element:   unwrap-element (keep children)
 //   - REMOVE_WHEN_UNSUPPORTED / SECURITY_ALWAYS:    remove-element (drop subtree)
-//   - partial support (a):                          warn-only (element kept)
+//   - unsupported attribute:                        remove-attribute
+//   - partial support (a):                          warn-only (kept)
 import type { Mutation } from '../types';
 import { featureBySlug } from '../data/snapshot';
 import {
   walkElements,
   elementLoc,
+  attrLoc,
   getAttr,
+  type Attribute,
   type Element,
   type ParentNode,
   type ChildNode,
@@ -87,6 +90,48 @@ const REMOVE_WHEN_UNSUPPORTED = new Set([
   'form', 'input', 'select', 'textarea', 'button', 'video', 'audio', 'svg', 'dialog',
   'link', 'base', 'object',
 ]);
+
+/** Attributes with their own caniemail entry. */
+const ATTRIBUTE_SLUG: Record<string, string> = {
+  align: 'html-align',
+  'aria-describedby': 'html-aria-describedby',
+  'aria-hidden': 'html-aria-hidden',
+  'aria-label': 'html-aria-label',
+  'aria-labelledby': 'html-aria-labelledby',
+  'aria-live': 'html-aria-live',
+  background: 'html-background',
+  cellpadding: 'html-cellpadding',
+  cellspacing: 'html-cellspacing',
+  command: 'html-command-attribute',
+  commandfor: 'html-command-attribute',
+  dir: 'html-dir',
+  height: 'html-height',
+  hidden: 'html-hidden',
+  inert: 'css-inert-attribute', // caniemail files it under CSS
+  lang: 'html-lang',
+  loading: 'html-loading-attribute',
+  popover: 'html-popover',
+  popovertarget: 'html-popover',
+  popovertargetaction: 'html-popover',
+  required: 'html-required',
+  role: 'html-role',
+  sizes: 'html-srcset',
+  srcset: 'html-srcset',
+  target: 'html-target',
+  valign: 'html-valign',
+  width: 'html-width',
+};
+
+function attributeSlug(el: Element, attr: Attribute): string | undefined {
+  if (attr.name === 'href') {
+    if (el.tagName !== 'a') return undefined;
+    const href = attr.value.trim().toLowerCase();
+    if (href.startsWith('#')) return 'html-anchor-links';
+    if (href.startsWith('mailto:')) return 'html-mailto-links';
+    return undefined;
+  }
+  return ATTRIBUTE_SLUG[attr.name];
+}
 
 /** Structural elements the engine must never touch. */
 const NEVER_TOUCH = new Set(['html', 'head', 'body', 'style']);
@@ -198,6 +243,39 @@ export function runSanitize(ctx: StageContext): void {
     if (apply === 'remove') detach(el);
     else unwrap(el);
   }
+
+  // Attributes, on the elements that are left.
+  walkElements(parsed.document, (el) => {
+    for (const attr of [...el.attrs]) {
+      const slug = attributeSlug(el, attr);
+      const feature = slug ? featureBySlug.get(slug) : undefined;
+      if (!slug || !feature) continue;
+      const support = feature.support[clientId];
+      if (support.status !== 'n' && support.status !== 'a') continue;
+      const removed = support.status === 'n';
+      if (removed) el.attrs.splice(el.attrs.indexOf(attr), 1);
+      ctx.mutations.push({
+        client: clientId,
+        stage: 'sanitize',
+        action: removed ? 'remove-attribute' : 'warn-only',
+        target: {
+          element: el.tagName,
+          loc: attrLoc(el, attr.name) ?? elementLoc(el),
+          property: attr.name,
+          value: attr.value,
+        },
+        feature: slug,
+        severity: removed ? 'error' : 'warning',
+        reason:
+          (removed
+            ? `${ctx.profile.name} does not support ${feature.title}. \`${attr.name}\` was ` +
+              `removed from <${el.tagName}>.`
+            : `${ctx.profile.name} has partial support for ${feature.title}. \`${attr.name}\` ` +
+              `on <${el.tagName}> was kept.`) + appendNotes(support.notes),
+        evidence: feature.url,
+      });
+    }
+  });
 }
 
 function securityMutation(ctx: StageContext, el: Element, tag: string): Mutation {

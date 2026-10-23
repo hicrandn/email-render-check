@@ -283,3 +283,35 @@ describe('css-filter: selectors and nesting', () => {
     expect(mutations.filter((m) => m.feature.startsWith('css-selector'))).toHaveLength(0);
   });
 });
+
+describe('sanitize: attributes', () => {
+  it('removes hidden in gmail, so the content shows', () => {
+    const { html: out, mutations } = simulate('<div hidden>secret</div>', 'gmail');
+    const m = byFeature(mutations, 'html-hidden');
+    expect(m[0].action).toBe('remove-attribute');
+    expect(out).not.toContain('hidden');
+    expect(out).toContain('secret');
+  });
+
+  it('removes srcset and sizes in gmail but keeps src', () => {
+    const { html: out } = simulate('<img src="a.png" srcset="a@2x.png 2x" sizes="100vw">', 'gmail');
+    expect(out).not.toContain('srcset');
+    expect(out).not.toContain('sizes');
+    expect(out).toContain('src="a.png"');
+  });
+
+  it('keeps hidden for apple-mail', () => {
+    expect(simulate('<div hidden>x</div>', 'apple-mail').html).toContain('hidden');
+  });
+
+  it('warns on width attributes in outlook-win (partial) and keeps them', () => {
+    const { html: out, mutations } = simulate('<table width="600"><tr><td>x</td></tr></table>', 'outlook-win');
+    expect(byFeature(mutations, 'html-width')[0].action).toBe('warn-only');
+    expect(out).toContain('width="600"');
+  });
+
+  it('warns on same-document anchor links in yahoo only', () => {
+    expect(byFeature(simulate('<a href="#top">x</a>', 'yahoo').mutations, 'html-anchor-links')).toHaveLength(1);
+    expect(byFeature(simulate('<a href="https://example.com/">x</a>', 'yahoo').mutations, 'html-anchor-links')).toHaveLength(0);
+  });
+});
