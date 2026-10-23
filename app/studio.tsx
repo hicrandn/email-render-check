@@ -23,7 +23,14 @@ import {
   type SimulationResult,
 } from '@/src/lib/engine/types';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ComputerIcon, Mail01Icon, Moon02Icon, SmartPhone01Icon, Sun03Icon } from '@hugeicons/core-free-icons';
+import {
+  ArrowUpRight01Icon,
+  ComputerIcon,
+  Mail01Icon,
+  Moon02Icon,
+  SmartPhone01Icon,
+  Sun03Icon,
+} from '@hugeicons/core-free-icons';
 import type { CmView } from './editor';
 
 // CodeMirror touches the DOM — load it client-side only.
@@ -73,23 +80,65 @@ const SAMPLE = `<!doctype html>
   </body>
 </html>`;
 
-const SEVERITY: Record<Mutation['severity'], { dot: string; badge: string; label: string }> = {
-  error: {
-    dot: 'bg-red-500',
-    badge: 'bg-red-50 text-red-700 ring-red-600/20',
-    label: 'Error',
-  },
-  warning: {
-    dot: 'bg-amber-500',
-    badge: 'bg-amber-50 text-amber-700 ring-amber-600/20',
-    label: 'Warning',
-  },
-  info: {
-    dot: 'bg-sky-500',
-    badge: 'bg-sky-50 text-sky-700 ring-sky-600/20',
-    label: 'Info',
-  },
+const SEVERITY: Record<Mutation['severity'], { dot: string; label: string }> = {
+  error: { dot: 'bg-red-500', label: 'Error' },
+  warning: { dot: 'bg-amber-500', label: 'Warning' },
+  info: { dot: 'bg-sky-500', label: 'Info' },
 };
+
+// What the client did, in words; the engine's action ids are internal.
+const ACTION_LABEL: Record<Mutation['action'], string> = {
+  'remove-property': 'Removed',
+  'remove-value': 'Removed',
+  'remove-rule': 'Removed',
+  'remove-element': 'Removed',
+  'remove-attribute': 'Removed',
+  'unwrap-element': 'Unwrapped',
+  rewrite: 'Rewritten',
+  'inject-default': 'Default added',
+  'auto-invert-color': 'Inverted',
+  'apply-dark-override': 'Dark styles applied',
+  'warn-only': 'Kept',
+};
+
+/**
+ * Engine reasons and Can I Email notes use `code` and [text](url) markdown.
+ * Render those two inline forms; everything else stays plain text.
+ */
+function RichText({ text }: { text: string }) {
+  const parts = text.split(/(`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)\s]+\))/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('`') && part.endsWith('`') && part.length > 1) {
+          return (
+            <code key={i} className="rounded bg-(--surface-tint) px-1 font-mono text-[0.92em]">
+              {part.slice(1, -1)}
+            </code>
+          );
+        }
+        const link = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(part);
+        if (link) {
+          return (
+            <a key={i} href={link[2]} target="_blank" rel="noopener noreferrer" className="underline decoration-(--border) underline-offset-2 hover:decoration-current">
+              {link[1]}
+            </a>
+          );
+        }
+        return part;
+      })}
+    </>
+  );
+}
+
+function evidenceLabel(url: string): string {
+  try {
+    const { hostname } = new URL(url);
+    return hostname.endsWith('caniemail.com') ? 'Can I Email' : hostname.replace(/^www\./, '');
+  } catch {
+    return 'Reference';
+  }
+}
 
 function shortName(id: ClientId): string {
   return PROFILES[id].name.split(' (')[0];
@@ -210,39 +259,42 @@ function IssueRow({ items, onSelect }: { items: Mutation[]; onSelect: (m: Mutati
   const element = !property && elements.size === 1 ? [...elements][0] : undefined;
 
   return (
-    <li className="px-3 py-2.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset ${sev.badge}`}>
-          {sev.label}
-        </span>
-        <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-(--fg-muted)">
-          {head.action}
-        </code>
-        {property && (
-          <code className="font-mono text-[11px] text-(--fg-muted)">
-            {property}
-            {value ? `: ${value}` : ''}
-          </code>
-        )}
-        {element && (
-          <code className="font-mono text-[11px] text-(--fg-muted)">&lt;{element}&gt;</code>
-        )}
-        {items.length > 1 && (
-          <span className="ml-auto rounded-full bg-(--surface-tint) px-1.5 text-[10px] font-semibold text-(--fg-muted)">
-            {items.length}×
-          </span>
-        )}
-      </div>
+    <li className="flex gap-2.5 px-4 py-3">
+      <span
+        title={sev.label}
+        aria-label={sev.label}
+        className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${sev.dot}`}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2 text-xs">
+          <span className="font-medium">{ACTION_LABEL[head.action]}</span>
+          {property && (
+            <code className="font-mono text-[11px] text-(--fg-muted)">
+              {property}
+              {value ? `: ${value}` : ''}
+            </code>
+          )}
+          {element && (
+            <code className="font-mono text-[11px] text-(--fg-muted)">&lt;{element}&gt;</code>
+          )}
+          {items.length > 1 && (
+            <span className="ml-auto text-[11px] tabular-nums text-(--fg-muted)">
+              {items.length} places
+            </span>
+          )}
+        </div>
 
-      <p className="mt-1.5 text-xs leading-relaxed text-(--fg)/80">{head.reason}</p>
-      {head.fix && (
-        <p className="mt-1 text-[11px] leading-relaxed text-(--fg-muted)">
-          <span className="font-semibold">Fix:</span> {head.fix}
+        <p className="mt-1 text-xs leading-relaxed text-(--fg)/80">
+          <RichText text={head.reason} />
         </p>
-      )}
+        {head.fix && (
+          <p className="mt-1 text-xs leading-relaxed text-(--fg-muted)">
+            <span className="font-medium text-(--fg)/80">Fix: </span>
+            <RichText text={head.fix} />
+          </p>
+        )}
 
-      {located.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-(--fg-muted)">
           {located.map((m, i) => (
             <button
               key={i}
@@ -254,22 +306,23 @@ function IssueRow({ items, onSelect }: { items: Mutation[]; onSelect: (m: Mutati
                     ? `<${m.target.element}>`
                     : undefined
               }
-              className="rounded bg-(--surface-tint) px-1.5 py-0.5 font-mono text-[10px] text-(--fg-muted) transition-colors hover:text-sky-500"
+              className="font-mono tabular-nums hover:text-(--fg)"
             >
-              L{m.target.loc!.startLine}:{m.target.loc!.startCol}
+              line {m.target.loc!.startLine}
             </button>
           ))}
+          <a
+            href={head.evidence}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={head.feature}
+            className="inline-flex items-center gap-0.5 hover:text-(--fg)"
+          >
+            {evidenceLabel(head.evidence)}
+            <HugeiconsIcon icon={ArrowUpRight01Icon} size={11} />
+          </a>
         </div>
-      )}
-
-      <a
-        href={head.evidence}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-1 inline-block text-[11px] font-medium text-sky-600 hover:underline"
-      >
-        {head.feature} ↗
-      </a>
+      </div>
     </li>
   );
 }
@@ -420,31 +473,31 @@ export default function Studio() {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-(--canvas) text-(--fg)">
       {/* Top bar */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-(--border) bg-(--panel) px-4 py-2.5">
-        <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-white">
-          <HugeiconsIcon icon={Mail01Icon} size={14} strokeWidth={2} />
-        </div>
-        <h1 className="text-sm font-semibold tracking-tight">Mail Check</h1>
-        <span className="hidden text-xs text-(--fg-muted) sm:inline">
+      <header className="flex shrink-0 items-center gap-2 border-b border-(--border) bg-(--panel) px-4 py-2.5">
+        <HugeiconsIcon icon={Mail01Icon} size={16} strokeWidth={1.8} />
+        <h1 className="text-sm font-semibold">Mail Check</h1>
+        <span className="ml-2 hidden text-xs text-(--fg-muted) sm:inline">
           How email clients render your HTML, and what they drop.
         </span>
-        <span className="ml-auto hidden shrink-0 text-[10px] text-(--fg-muted)/70 sm:inline">
-          Compatibility data as of {snapshot.lastUpdate.split(' ')[0]}
-        </span>
+        <a
+          href="https://www.caniemail.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto hidden shrink-0 text-[11px] text-(--fg-muted) hover:text-(--fg) sm:inline"
+        >
+          Can I Email data, {snapshot.lastUpdate.split(' ')[0]}
+        </a>
       </header>
 
       {/* Pane-title strip — reads as one filename row across both panes. */}
       <div className="flex shrink-0 items-stretch border-b border-(--border) bg-(--panel-2) text-[11px] text-(--fg-muted)">
-        <div className="relative flex w-[46%] min-w-0 items-center justify-center border-r border-(--border) px-3 py-2">
-          <span className="font-mono">source.html</span>
-          <span className="absolute right-3 font-mono tabular-nums text-(--fg-muted)/70">
-            {source.split('\n').length} lines
-          </span>
+        <div className="flex w-[46%] min-w-0 items-center justify-between gap-3 border-r border-(--border) px-4 py-2">
+          <span className="font-mono text-(--fg)/80">source.html</span>
+          <span className="font-mono tabular-nums">{source.split('\n').length} lines</span>
         </div>
-        <div className="flex flex-1 min-w-0 items-center justify-center px-3 py-2">
-          <span className="truncate font-mono">
-            {shortName(active)} · {PROFILES[active].engine}
-          </span>
+        <div className="flex min-w-0 flex-1 items-center gap-2 px-4 py-2">
+          <span className="shrink-0 font-medium text-(--fg)/80">{PROFILES[active].name}</span>
+          <span className="truncate">{PROFILES[active].engine}</span>
         </div>
       </div>
 
@@ -462,9 +515,9 @@ export default function Studio() {
           <nav
             role="tablist"
             aria-label="Email client"
-            className="flex shrink-0 items-center gap-2 border-b border-(--border) bg-(--panel) px-2 py-1.5"
+            className="flex shrink-0 items-stretch gap-2 border-b border-(--border) bg-(--panel) px-2"
           >
-            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
             {CLIENT_IDS.map((id) => {
               const res = results[id];
               const isActive = active === id;
@@ -482,31 +535,24 @@ export default function Studio() {
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => setActive(id)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`relative flex shrink-0 items-center gap-2 px-3 py-2.5 text-xs transition-colors ${
                     isActive
-                      ? 'bg-(--tab-active-bg) text-(--tab-active-fg)'
-                      : 'text-(--fg-muted) hover:bg-black/5'
+                      ? 'font-medium text-(--fg) after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:bg-(--fg)'
+                      : 'text-(--fg-muted) hover:text-(--fg)'
                   }`}
                 >
                   {shortName(id)}
                   {res?.error && (
-                    <span
-                      title={res.error}
-                      className="rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white"
-                    >
-                      !
+                    <span title={res.error} className="text-[11px] font-normal text-red-600">
+                      failed
                     </span>
                   )}
                   {!res?.error && res && res.result.mutations.length > 0 && (
                     <span
-                      className={`rounded-full px-1.5 text-[10px] font-semibold ${
-                        worst === 'error'
-                          ? 'bg-red-500 text-white'
-                          : worst === 'warning'
-                            ? 'bg-amber-400/90 text-white'
-                            : 'bg-sky-500/90 text-white'
-                      }`}
+                      title={`${badgeCount} ${SEVERITY[worst].label.toLowerCase()}${badgeCount === 1 ? '' : 's'}`}
+                      className="flex items-center gap-1 text-[11px] font-normal tabular-nums text-(--fg-muted)"
                     >
+                      <span className={`h-1.5 w-1.5 rounded-full ${SEVERITY[worst].dot}`} />
                       {badgeCount}
                     </span>
                   )}
@@ -516,11 +562,11 @@ export default function Studio() {
             </div>
 
             {alwaysLight && (
-              <span className="shrink-0 rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-medium text-amber-600 ring-1 ring-amber-500/30">
-                {shortName(active)} always light
+              <span className="shrink-0 self-center text-[11px] text-(--fg-muted)">
+                {shortName(active)} has no dark mode
               </span>
             )}
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1.5 py-1.5">
               <Segmented
                 value={device}
                 onPick={setDevice}
@@ -551,7 +597,9 @@ export default function Studio() {
           >
             <div
               style={{ maxWidth: DEVICE_WIDTH[device] }}
-              className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg shadow-xl ring-1 ring-(--preview-frame-ring) transition-[max-width] "
+              className={`mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-md border transition-[max-width] ${
+                previewScheme === 'dark' ? 'border-white/10' : 'border-(--border)'
+              }`}
             >
               {activeError ? (
                 <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1 bg-(--panel) p-6 text-center">
@@ -589,20 +637,18 @@ export default function Studio() {
 
           {/* Issues panel */}
           <div className="flex min-h-0 flex-1 flex-col border-t border-(--border) bg-(--panel)">
-            <div className="flex shrink-0 items-center gap-3 border-b border-(--border-soft) px-3 py-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-(--fg-muted)">
-                Incompatibilities
-              </span>
-              <div className="flex items-center gap-3 text-[11px] text-(--fg-muted)">
+            <div className="flex shrink-0 items-baseline gap-3 border-b border-(--border) px-4 py-2.5">
+              <span className="text-xs font-medium">Issues in {shortName(active)}</span>
+              <div className="flex items-center gap-3 text-[11px] tabular-nums text-(--fg-muted)">
                 {counts.error > 0 && (
-                  <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-red-500" />
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
                     {counts.error} error{counts.error === 1 ? '' : 's'}
                   </span>
                 )}
                 {counts.warning > 0 && (
-                  <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                     {counts.warning} warning{counts.warning === 1 ? '' : 's'}
                   </span>
                 )}
@@ -621,13 +667,9 @@ export default function Studio() {
                 <>
                   {groups.map((g) => (
                     <section key={g.stage}>
-                      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-(--border-soft) bg-(--panel-2) px-3 py-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-(--fg-muted)">
-                          {STAGE_LABELS[g.stage]}
-                        </span>
-                        <span className="rounded-full bg-(--surface-tint) px-1.5 text-[10px] font-semibold text-(--fg-muted)">
-                          {g.issues.length}
-                        </span>
+                      <div className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-(--border-soft) bg-(--panel-2) px-4 py-1.5 text-[11px] text-(--fg-muted)">
+                        <span className="font-medium text-(--fg)/70">{STAGE_LABELS[g.stage]}</span>
+                        <span className="tabular-nums">{g.issues.length}</span>
                       </div>
                       <ul className="divide-y divide-(--border-soft)">
                         {g.issues.map((iss) => (

@@ -11,9 +11,6 @@
   --border-soft: #f0f0f1;
   --fg: #18181b;
   --fg-muted: #6b7280;
-  --preview-frame-ring: rgb(0 0 0 / 0.05);
-  --tab-active-bg: #18181b;
-  --tab-active-fg: #ffffff;
   --surface-tint: rgb(0 0 0 / 0.05);
 }
 
