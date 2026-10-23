@@ -1,7 +1,7 @@
 {
   "apiVersion": "1.0.4",
-  "lastUpdate": "2026-06-29 16:42:09 +0000",
-  "generatedAt": "2026-07-19T18:06:35.808Z",
+  "lastUpdate": "2026-09-16 13:05:00 +0000",
+  "generatedAt": "2026-10-23T21:04:59.210Z",
   "features": [
     {
       "slug": "amp",
@@ -9674,6 +9674,45 @@
       }
     },
     {
+      "slug": "html-command-attribute",
+      "title": "command and commandfor attributes",
+      "category": "html",
+      "url": "https://www.caniemail.com/features/html-command-attribute/",
+      "keywords": "",
+      "support": {
+        "gmail": {
+          "status": "n",
+          "version": "2026-07",
+          "resolution": "direct",
+          "notes": []
+        },
+        "outlook-win": {
+          "status": "n",
+          "version": "2019",
+          "resolution": "direct",
+          "notes": []
+        },
+        "outlook-com": {
+          "status": "n",
+          "version": "2026-07",
+          "resolution": "direct",
+          "notes": []
+        },
+        "apple-mail": {
+          "status": "y",
+          "version": "16",
+          "resolution": "direct",
+          "notes": []
+        },
+        "yahoo": {
+          "status": "n",
+          "version": "2026-07",
+          "resolution": "direct",
+          "notes": []
+        }
+      }
+    },
+    {
       "slug": "html-comments",
       "title": "HTML comments",
       "category": "html",
@@ -10724,7 +10763,7 @@
       "support": {
         "gmail": {
           "status": "n",
-          "version": "2023-09",
+          "version": "2026-09",
           "resolution": "direct",
           "notes": []
         },
@@ -12351,10 +12390,12 @@
       "keywords": "image, SVG",
       "support": {
         "gmail": {
-          "status": "n",
-          "version": "2024-07",
+          "status": "a",
+          "version": "2026-09",
           "resolution": "direct",
-          "notes": []
+          "notes": [
+            "Partially supported. The image is rendered but rasterized in PNG."
+          ]
         },
         "outlook-win": {
           "status": "y",
@@ -12376,7 +12417,7 @@
         },
         "yahoo": {
           "status": "y",
-          "version": "2020-02",
+          "version": "2026-09",
           "resolution": "direct",
           "notes": []
         }
