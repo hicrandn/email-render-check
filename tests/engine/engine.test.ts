@@ -166,3 +166,32 @@ describe('sanitize: <input> and <button> types', () => {
     expect(byFeature(mutations, 'html-button-submit')).toHaveLength(0);
   });
 });
+
+describe('css-filter: longhands, logical properties and keywords', () => {
+  it('removes a border-radius longhand for outlook-win', () => {
+    const { html: out, mutations } = simulate('<div style="border-top-left-radius:8px">x</div>', 'outlook-win');
+    expect(byFeature(mutations, 'css-border-radius')[0].action).toBe('remove-property');
+    expect(out).not.toContain('radius');
+  });
+
+  it('removes margin-inline and left for gmail', () => {
+    const { mutations } = simulate('<div style="margin-inline:auto;left:10px">x</div>', 'gmail');
+    expect(byFeature(mutations, 'css-margin-inline-block')).toHaveLength(1);
+    expect(byFeature(mutations, 'css-left-right-top-bottom')).toHaveLength(1);
+  });
+
+  it('warns on margin-top (partial in gmail)', () => {
+    const { mutations } = simulate('<div style="margin-top:10px">x</div>', 'gmail');
+    expect(byFeature(mutations, 'css-margin')[0].action).toBe('warn-only');
+  });
+
+  it('does not count a shorthand twice through its expanded longhands', () => {
+    const { mutations } = simulate('<div style="margin:10px 20px">x</div>', 'gmail');
+    expect(byFeature(mutations, 'css-margin')).toHaveLength(1);
+  });
+
+  it('removes fit-content for outlook-win', () => {
+    const { mutations } = simulate('<div style="width:fit-content">x</div>', 'outlook-win');
+    expect(byFeature(mutations, 'css-intrinsic-size')[0].action).toBe('remove-value');
+  });
+});

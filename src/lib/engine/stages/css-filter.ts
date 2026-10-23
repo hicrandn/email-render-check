@@ -10,7 +10,7 @@
 import valueParser from 'postcss-value-parser';
 import type { ClientId, Mutation, MutationAction, Severity } from '../types';
 import { featureBySlug } from '../data/snapshot';
-import { SLUG_MAP } from '../data/slug-map';
+import { SLUG_MAP, type SlugMapping } from '../data/slug-map';
 import { removeTokenFromDecl, type ParsedDeclaration } from '../parse/css';
 import type { StageContext } from './context';
 
@@ -42,7 +42,7 @@ function analyzeValue(value: string): ValueAnalysis {
 interface Match {
   slug: string;
   /** How to act if the slug is unsupported. */
-  kind: 'property' | 'value' | 'function' | 'unit';
+  kind: SlugMapping['kind'];
 }
 
 function findMatches(decl: ParsedDeclaration, analysis: ValueAnalysis): Match[] {
@@ -67,9 +67,21 @@ function findMatches(decl: ParsedDeclaration, analysis: ValueAnalysis): Match[] 
       matches.push({ slug: m.slug, kind: 'unit' });
     }
   }
+  // Keyword-level (e.g. fit-content in any property).
+  for (const m of SLUG_MAP.keywordMappings) {
+    if (m.keywords.some((k) => analysis.keywords.has(k))) {
+      matches.push({ slug: m.slug, kind: 'keyword' });
+    }
+  }
   // Property-level (least specific; still relevant even if a value matched).
-  const prop = SLUG_MAP.byProperty.get(decl.prop);
-  if (prop) matches.push({ slug: prop.slug, kind: 'property' });
+  // A longhand expanded from a shorthand covered by the same slug was already
+  // checked as the shorthand itself.
+  const shorthandSlugs = new Set(
+    (decl.expandedFrom ? SLUG_MAP.byProperty.get(decl.expandedFrom) ?? [] : []).map((m) => m.slug),
+  );
+  for (const m of SLUG_MAP.byProperty.get(decl.prop) ?? []) {
+    if (!shorthandSlugs.has(m.slug)) matches.push({ slug: m.slug, kind: 'property' });
+  }
 
   return matches;
 }
@@ -154,7 +166,8 @@ function applyRemoval(
     removed.add(decl.decl);
     sheet.dirty = true;
   }
-  const action: MutationAction = match.kind === 'value' ? 'remove-value' : 'remove-property';
+  const action: MutationAction =
+    match.kind === 'value' || match.kind === 'keyword' ? 'remove-value' : 'remove-property';
   ctx.mutations.push(
     buildMutation(ctx.clientId, decl, match, feature, action, 'error',
       removalReason(ctx, feature, support.notes, decl)),

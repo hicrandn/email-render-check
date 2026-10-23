@@ -78,6 +78,16 @@ describe('slug map', () => {
     expect(m).toMatchObject({ kind: 'property', property: 'border-radius' });
   });
 
+  it('only maps slugs that exist in the snapshot', () => {
+    const missing = SLUG_MAP.mappings.filter((m) => !featureBySlug.has(m.slug)).map((m) => m.slug);
+    expect(missing).toEqual([]);
+  });
+
+  it('maps every border-radius longhand to css-border-radius', () => {
+    const slugs = SLUG_MAP.byProperty.get('border-top-left-radius')?.map((m) => m.slug);
+    expect(slugs).toEqual(['css-border-radius']);
+  });
+
   it('keeps selector/pseudo/at-rule slugs in UNMAPPED (never swallowed)', () => {
     expect(UNMAPPED).toContain('css-selector-child');
     expect(UNMAPPED).toContain('css-pseudo-class-hover');
