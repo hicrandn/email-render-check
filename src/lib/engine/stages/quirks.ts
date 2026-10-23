@@ -10,6 +10,7 @@
 import type { Mutation } from '../types';
 import type { StageContext } from './context';
 import { checkMobileFit } from './mobile-fit';
+import { applyMsoHide, renderVml } from './mso';
 
 const GMAIL_CLIP_DOC =
   'https://github.com/hteumeuleu/email-bugs/issues/41'; // documents Gmail's 102KB clipping
@@ -46,6 +47,11 @@ export function runQuirks(ctx: StageContext): void {
         });
       }
     }
+  }
+
+  if (q.conditionalComments) {
+    applyMsoHide(ctx);
+    renderVml(ctx);
   }
 
   checkMobileFit(ctx);

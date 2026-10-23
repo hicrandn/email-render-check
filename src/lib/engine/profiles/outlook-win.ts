@@ -13,6 +13,7 @@ export const outlookWin: ClientProfile = {
     'img{-ms-interpolation-mode:bicubic;}',
   ].join('\n'),
   quirks: {
+    conditionalComments: true,
     unreliablePercentWidth: true,
   },
   darkMode: {

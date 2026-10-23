@@ -33,6 +33,9 @@ pnpm update-caniemail   # refresh src/lib/engine/data/caniemail.json
   issues panel. `app/editor.tsx` wraps CodeMirror (client-only).
 - `src/lib/engine/` — pure TypeScript, no DOM or Next.js imports.
   `simulate(html, clientId, context)` in `engine.ts` runs:
+  0. `stages/mso.ts` (Outlook on Windows only) — reveal `<!--[if mso]>`
+     content on the source string, keeping offsets; hide `<!--[if !mso]><!-->`
+     content; at the end, draw VML shapes as HTML and apply `mso-hide:all`
   1. `parse/` — parse5 HTML and postcss CSS ASTs with source locations
   2. `stages/sanitize.ts` — drop or unwrap unsupported elements, attributes
      and `<img>` formats

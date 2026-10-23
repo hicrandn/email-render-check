@@ -19,6 +19,7 @@ import { runCssFilter } from './stages/css-filter';
 import { runDefaults } from './stages/defaults';
 import { runDarkMode } from './stages/dark-mode';
 import { runQuirks, applyOutputQuirks } from './stages/quirks';
+import { readsConditionals, revealConditionals, runConditionals } from './stages/mso';
 
 const STAGE_ORDER: Record<MutationStage, number> = {
   sanitize: 0,
@@ -76,10 +77,13 @@ export function simulate(
   clientId: ClientId,
   context: RenderContext = DEFAULT_CONTEXT,
 ): SimulationResult {
-  const parsed = parseHtml(html);
+  const profile = getProfile(clientId);
+  // Outlook renders `<!--[if mso]>` content; reveal it before parsing (mso.ts).
+  const revealed = readsConditionals(profile) ? revealConditionals(html) : { html, blocks: [] };
+  const parsed = parseHtml(revealed.html);
   const ctx: StageContext = {
     clientId,
-    profile: getProfile(clientId),
+    profile,
     parsed,
     render: context,
     sheets: [],
@@ -87,6 +91,7 @@ export function simulate(
   };
 
   // 1. sanitize (mutates the element tree first).
+  if (readsConditionals(profile)) runConditionals(ctx, revealed.blocks);
   runSanitize(ctx);
 
   // 2. parse CSS from the sanitized tree, then css-filter.

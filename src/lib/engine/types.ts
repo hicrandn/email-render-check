@@ -109,6 +109,8 @@ export interface SimulationResult {
 export interface ClientQuirks {
   /** Message is clipped past this size (Gmail = 102 KB). */
   maxSizeKB?: number;
+  /** Reads `<!--[if mso]>` conditional comments and draws VML (Word). */
+  conditionalComments?: boolean;
   /** Percentage widths render unreliably; needs fixed-width + ghost tables (Word). */
   unreliablePercentWidth?: boolean;
 }
