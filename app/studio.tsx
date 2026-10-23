@@ -46,31 +46,25 @@ const SAMPLE = `<!doctype html>
         <table role="presentation" width="600" cellpadding="0" cellspacing="0"
                style="background:#ffffff;border-radius:8px;overflow:hidden">
           <tr><td align="center" style="background:#2563eb;padding:36px 32px">
-            <h1 style="margin:0 0 6px;color:#ffffff;font-size:30px">Hello, gorgeous!</h1>
+            <h1 style="margin:0;color:#ffffff;font-size:28px">Your order has shipped</h1>
           </td></tr>
 
           <tr><td class="card" style="display:flex;gap:12px;padding:36px 40px 24px">
             <p style="margin:0;color:#4b5563;font-size:15px;line-height:1.6">
-              Click through the client tabs. Outlook is about to soften these rounded
-              corners by deleting them and flatten this flexbox like it's 2007.
-              Paste your own HTML on the left: every declaration a client drops shows
-              up below with the reason and a link to the evidence.
+              Order #10423 left our warehouse this morning and should arrive within
+              3–5 business days. Use the link below to follow it.
             </p>
           </td></tr>
 
           <tr><td align="center" style="padding:0 40px 36px">
-            <a href="https://www.caniemail.com" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 28px;display:inline-block;font-size:15px;font-weight:bold;border-radius:999px;box-shadow:0 6px 16px rgba(37,99,235,0.35)">
-              Browse the support data →
+            <a href="https://example.com/track" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 28px;display:inline-block;font-size:15px;font-weight:bold;border-radius:999px;box-shadow:0 6px 16px rgba(37,99,235,0.35)">
+              Track your package
             </a>
-            <p style="margin:12px 0 0;font-size:12px;color:#9ca3af">
-              Yes, that pill is round. Ask Outlook how it feels about that.
-            </p>
           </td></tr>
 
           <tr><td align="center" style="background:#f9fafb;padding:20px 40px">
             <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6">
-              No account, no tracking pixel, no "click here to view in browser".<br>
-              Everything runs locally in your browser.
+              Questions about your order? Just reply to this email.
             </p>
           </td></tr>
         </table>
@@ -197,7 +191,7 @@ function Segmented<T extends string>({
 }
 
 /**
- * One row per DISTINCT issue. The same feature hit at 15 source locations is a
+ * One row per distinct issue. The same feature hit at 15 source locations is a
  * single row with 15 jump-to chips, not 15 copies of the same explanation —
  * otherwise the genuinely different problems drown in repetition.
  */
@@ -286,7 +280,7 @@ export default function Studio() {
   const [active, setActive] = useState<ClientId>('gmail');
   const viewRef = useRef<CmView | null>(null);
 
-  // How the EMAIL is previewed (independent of the studio's own theme): the
+  // How the email is previewed (independent of the studio's own theme): the
   // device width it's viewed at, and whether it's shown on a light or dark
   // screen — because the same email is opened on phones and dark clients.
   const [device, setDevice] = useState<Device>('desktop');
@@ -432,7 +426,7 @@ export default function Studio() {
         </div>
         <h1 className="text-sm font-semibold tracking-tight">Mail Check</h1>
         <span className="hidden text-xs text-(--fg-muted) sm:inline">
-          See how each client mangles your HTML — and why.
+          How email clients render your HTML, and what they drop.
         </span>
         <span className="ml-auto hidden shrink-0 text-[10px] text-(--fg-muted)/70 sm:inline">
           Compatibility data as of {snapshot.lastUpdate.split(' ')[0]}
@@ -474,7 +468,7 @@ export default function Studio() {
             {CLIENT_IDS.map((id) => {
               const res = results[id];
               const isActive = active === id;
-              // Badge shows the count of the WORST severity present, colored to
+              // Badge shows the count of the worst severity present, colored to
               // match — not the total mutation count. Otherwise a client with 90
               // informational notes and 1 real error reads as "91 errors" (red).
               const errs = res ? distinctCount(res.result.mutations, 'error') : 0;
@@ -561,7 +555,6 @@ export default function Studio() {
             >
               {activeError ? (
                 <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1 bg-(--panel) p-6 text-center">
-                  <span className="text-xl">⚠️</span>
                   <p className="text-xs text-(--fg-muted)">
                     Couldn&apos;t render this HTML for {shortName(active)} — see the note below.
                   </p>
@@ -619,10 +612,8 @@ export default function Studio() {
             <div className="min-h-0 flex-1 overflow-auto">
               {activeError ? (
                 <div className="flex flex-col items-center justify-center gap-1 px-3 py-10 text-center">
-                  <span className="text-2xl">⚠️</span>
                   <p className="max-w-xs text-xs text-(--fg-muted)">
-                    This HTML is too deeply nested to analyze for {shortName(active)} — try
-                    flattening the markup.
+                    Couldn&apos;t analyze this HTML for {shortName(active)}.
                   </p>
                   <p className="mt-1 max-w-xs font-mono text-[10px] text-(--fg-muted)/70">{activeError}</p>
                 </div>
@@ -647,7 +638,6 @@ export default function Studio() {
                   ))}
                   {result.mutations.length === 0 && (
                     <div className="flex flex-col items-center justify-center gap-1 px-3 py-10 text-center">
-                      <span className="text-2xl">🎉</span>
                       <p className="text-xs text-(--fg-muted)">
                         No incompatibilities for {shortName(active)}.
                       </p>

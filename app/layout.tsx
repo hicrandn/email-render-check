@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Mail Check",
-  description: "Simulate how email clients render your HTML — and why features break.",
+  description: "Preview how email clients render your HTML and which features they drop.",
 };
 
 export default function RootLayout({
