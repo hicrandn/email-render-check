@@ -2,3 +2,11 @@ allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
+
+# eslint-config-next >=16.4 supports ESLint 10, but these plugins haven't
+# widened their peer ranges yet. Their rules were checked to work on 10.
+peerDependencyRules:
+  allowedVersions:
+    eslint-plugin-import>eslint: '10'
+    eslint-plugin-jsx-a11y>eslint: '10'
+    eslint-plugin-react>eslint: '10'
