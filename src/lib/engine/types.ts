@@ -120,7 +120,12 @@ export interface ClientQuirks {
 // strategy, so we model it explicitly instead of a single boolean.
 // ---------------------------------------------------------------------------
 
-export type DarkModeStrategy = 'native' | 'auto-invert' | 'partial' | 'unsupported';
+/**
+ * none: colors untouched, the light design shows. native: the author's dark
+ * styles apply, colors are never changed. partial-invert: light backgrounds
+ * and dark text are recolored. full-invert: every color's lightness flips.
+ */
+export type DarkModeStrategy = 'none' | 'native' | 'partial-invert' | 'full-invert';
 
 // Support for @media (prefers-color-scheme) and the color-scheme meta tag comes
 // from the caniemail snapshot, not from the profile.

@@ -9,10 +9,10 @@ export const yahooMobile: ClientProfile = {
   uaStylesheet: "body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;}",
   quirks: {},
   darkMode: {
-    strategy: 'auto-invert',
+    strategy: 'none',
     supportsOgscHack: false,
     note:
-      'The Yahoo! Mail apps ignore @media (prefers-color-scheme: dark) and ' +
-      'auto-invert undeclared colors.',
+      'The Yahoo! Mail apps are reported to leave email colors alone in dark mode ' +
+      '(sources disagree; test on a device).',
   },
 };

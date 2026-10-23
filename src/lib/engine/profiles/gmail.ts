@@ -11,10 +11,10 @@ export const gmail: ClientProfile = {
     maxSizeKB: 102, // Gmail clips messages larger than ~102 KB.
   },
   darkMode: {
-    strategy: 'auto-invert',
+    strategy: 'none',
     supportsOgscHack: false,
     note:
-      'Gmail ignores @media (prefers-color-scheme: dark) and the color-scheme ' +
-      'meta, and auto-inverts colors on many surfaces.',
+      'Gmail on the web only darkens its own interface; email keeps its colors. It ' +
+      'also ignores @media (prefers-color-scheme: dark).',
   },
 };

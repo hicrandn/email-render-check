@@ -9,10 +9,9 @@ export const yahoo: ClientProfile = {
   uaStylesheet: "body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;}",
   quirks: {},
   darkMode: {
-    strategy: 'auto-invert',
+    strategy: 'none',
     supportsOgscHack: false,
     note:
-      'Yahoo! Mail ignores @media (prefers-color-scheme: dark) and auto-inverts ' +
-      'undeclared colors.',
+      'Yahoo! Mail on the web only darkens its own interface; email keeps its colors.',
   },
 };

@@ -13,4 +13,6 @@ export interface StageContext {
   sheets: StyleSheet[];
   /** The single source of truth: every stage appends to this log. */
   mutations: Mutation[];
+  /** Set by the dark-mode stage when the client recolors: for colors added later (VML). */
+  recolor?: (color: string, role: 'text' | 'background') => string;
 }

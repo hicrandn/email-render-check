@@ -11,10 +11,11 @@ export const gmailMobile: ClientProfile = {
     maxSizeKB: 102, // the apps clip at the same size as webmail
   },
   darkMode: {
-    strategy: 'auto-invert',
+    strategy: 'full-invert',
     supportsOgscHack: false,
     note:
-      'The Gmail apps ignore @media (prefers-color-scheme: dark) and invert ' +
-      'colors on their own.',
+      'The Gmail apps recolor email in dark mode and ignore @media ' +
+      '(prefers-color-scheme: dark): fully on iOS, partially on Android. The ' +
+      'stronger iOS inversion is simulated.',
   },
 };

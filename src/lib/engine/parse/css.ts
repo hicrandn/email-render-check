@@ -50,7 +50,10 @@ export interface StyleSheet {
   stripped?: boolean;
 }
 
-const EXPANDABLE = new Set(['border', 'background', 'font', 'margin', 'padding']);
+const EXPANDABLE = new Set([
+  'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+  'background', 'font', 'margin', 'padding',
+]);
 
 function locFromOffsets(
   lineIndex: LineIndex,
@@ -111,14 +114,15 @@ function expandShorthand(prop: string, value: string): Expansion[] {
         out.push({ prop: 'background-color', value: nodeText(n), token: { sourceIndex: n.sourceIndex, text: nodeText(n) } });
       }
     }
-  } else if (prop === 'border') {
+  } else if (prop.startsWith('border')) {
+    // `border` or one side: `border-top` -> `border-top-color`, …
     for (const n of nodes) {
       if (n.type === 'word' && BORDER_STYLES.has(n.value.toLowerCase())) {
-        out.push({ prop: 'border-style', value: n.value });
+        out.push({ prop: `${prop}-style`, value: n.value });
       } else if (isColorNode(n)) {
-        out.push({ prop: 'border-color', value: nodeText(n) });
+        out.push({ prop: `${prop}-color`, value: nodeText(n), token: { sourceIndex: n.sourceIndex, text: nodeText(n) } });
       } else if (n.type === 'word' && /^[\d.]+[a-z%]*$/i.test(n.value)) {
-        out.push({ prop: 'border-width', value: n.value });
+        out.push({ prop: `${prop}-width`, value: n.value });
       }
     }
   } else if (prop === 'font') {

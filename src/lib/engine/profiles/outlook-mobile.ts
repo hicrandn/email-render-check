@@ -9,10 +9,10 @@ export const outlookMobile: ClientProfile = {
   uaStylesheet: "body{font-family:-apple-system,Roboto,'Segoe UI',Arial,sans-serif;}",
   quirks: {},
   darkMode: {
-    strategy: 'partial',
+    strategy: 'partial-invert',
     supportsOgscHack: true,
     note:
-      'The Outlook apps honor @media (prefers-color-scheme: dark). In dark mode ' +
-      'they also rewrite some colors and mark them with [data-ogsc]/[data-ogsb].',
+      'The Outlook apps darken light backgrounds and lighten dark text, marking what ' +
+      'they changed with [data-ogsc]/[data-ogsb].',
   },
 };

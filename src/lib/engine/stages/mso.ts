@@ -245,7 +245,9 @@ export function renderVml(ctx: StageContext): void {
     const height = px(style.get('height'));
     const fill = shape.childNodes.find((c): c is Element => isElement(c) && c.tagName === 'v:fill');
     const stroked = !vmlFalse(getAttr(shape, 'stroked')?.value) && !vmlFalse(getAttr(shape, 'stroke')?.value);
-    const fillColor = getAttr(fill ?? shape, 'color')?.value ?? getAttr(shape, 'fillcolor')?.value;
+    // Colors added after the dark-mode stage get the same recoloring.
+    const dark = (c: string | undefined) => (c && ctx.recolor ? ctx.recolor(c, 'background') : c);
+    const fillColor = dark(getAttr(fill ?? shape, 'color')?.value ?? getAttr(shape, 'fillcolor')?.value);
     const filled = !vmlFalse(getAttr(shape, 'filled')?.value);
     const image = fill && getAttr(fill, 'src')?.value;
 
@@ -261,7 +263,7 @@ export function renderVml(ctx: StageContext): void {
     if (image) css.push(`background-image:url("${image.replace(/"/g, '%22')}")`, 'background-size:cover');
     if (stroked) {
       const weight = px(getAttr(shape, 'strokeweight')?.value) ?? 1;
-      css.push(`border:${weight}px solid ${getAttr(shape, 'strokecolor')?.value ?? '#000'}`);
+      css.push(`border:${weight}px solid ${dark(getAttr(shape, 'strokecolor')?.value ?? '#000000')}`);
     }
     if (shape.tagName === 'v:oval') css.push('border-radius:50%');
     if (shape.tagName === 'v:roundrect') {

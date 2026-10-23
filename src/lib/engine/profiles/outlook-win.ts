@@ -17,10 +17,10 @@ export const outlookWin: ClientProfile = {
     unreliablePercentWidth: true,
   },
   darkMode: {
-    strategy: 'unsupported',
+    strategy: 'full-invert',
     supportsOgscHack: false,
     note:
-      'Outlook on Windows (Word engine) always renders the light design ' +
-      'regardless of the OS dark-mode setting.',
+      'Outlook on Windows (Microsoft 365, 2021) fully inverts colors in dark mode, ' +
+      'unless the reader switches the message background back to light.',
   },
 };

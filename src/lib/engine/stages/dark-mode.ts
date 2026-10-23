@@ -1,24 +1,30 @@
 // Dark-mode stage. Runs after `defaults`, before `quirks`. Always declares the
 // rendered color scheme; under a dark context it branches on the client's
-// DarkModeProfile:
+// DarkModeProfile (sources: Litmus' dark mode guide and Can I Email):
 //
-//   unsupported (Outlook/Win): render light; emit one info.
-//   native / partial (Apple Mail, Outlook.com): apply the author's
-//     prefers-color-scheme dark rules if present; otherwise keep light.
-//   auto-invert (Gmail, Yahoo): simulate the client's automatic HSL lightness
-//     inversion of undeclared colors, and flag the contrast / image failures
-//     it causes.
+//   none (Gmail and Yahoo on the web): the light design, as authored.
+//   native (Apple Mail): the author's prefers-color-scheme dark rules apply;
+//     colors are never changed, but undeclared backgrounds and text follow
+//     the dark scheme.
+//   partial-invert (Outlook.com, the Outlook apps): light backgrounds are
+//     darkened and dark text lightened; dark backgrounds and light text stay.
+//   full-invert (the Gmail apps, Outlook on Windows): every color's lightness
+//     is flipped.
 //
-// Whether a client honors the color-scheme meta tag is read from caniemail, not
-// assumed from the strategy; unsupported @media (prefers-color-scheme) blocks
-// are removed earlier by the CSS filter.
+// Inverting clients that honor prefers-color-scheme (Outlook.com) also apply
+// the author's dark rules, on top of their own recoloring. Whether a client
+// honors prefers-color-scheme or the color-scheme meta is read from Can I
+// Email; unsupported @media (prefers-color-scheme) blocks are removed earlier
+// by the CSS filter.
 import valueParser from 'postcss-value-parser';
-import type { SourceLocation } from '../types';
+import type { AtRule } from 'postcss';
+import type { DarkModeStrategy, SourceLocation } from '../types';
 import type { StageContext } from './context';
 import { cssNodeLoc, type ParsedDeclaration, type RemoveToken, type StyleSheet } from '../parse/css';
 import {
   walkElements,
   elementLoc,
+  attrLoc,
   getAttr,
   isTextNode,
   findElement,
@@ -29,7 +35,7 @@ import {
   type ChildNode,
   type ParentNode,
 } from '../parse/html';
-import { contrastRatio, flipLightness, parseColor } from '../color';
+import { contrastRatio, flipLightness, parseColor, rgbToHsl } from '../color';
 import { supportFor } from '../data/snapshot';
 
 const PREFERS_DARK_SLUG = 'css-at-media-prefers-color-scheme';
@@ -37,18 +43,43 @@ const META_SLUG = 'html-meta-color-scheme';
 const PREFERS_DARK_DOC =
   'https://www.caniemail.com/features/css-at-media-prefers-color-scheme/';
 const META_DOC = 'https://www.caniemail.com/features/html-meta-color-scheme/';
-const OGSC_DOC =
+const DARK_MODE_DOC =
   'https://www.litmus.com/blog/the-ultimate-guide-to-dark-mode-for-email-marketers';
 const CONTRAST_DOC = 'https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html';
 
-const COLOR_PROPS = new Set(['color', 'background-color', 'border-color']);
 const AA_NORMAL = 4.5;
 
-// Browser defaults assumed for an undeclared member of a text/background pair —
-// this is what makes the canonical failure (white card flips to black, default
-// black text vanishes) detectable.
-const DEFAULT_TEXT = '#000000';
-const DEFAULT_BG = '#ffffff';
+// Undeclared text and background: the browser's light defaults, and what the
+// preview shows once the dark scheme is declared (`color-scheme: dark`).
+const LIGHT_TEXT = '#000000';
+const LIGHT_BG = '#ffffff';
+const DARK_TEXT = '#ffffff';
+const DARK_BG = '#121212';
+
+type Role = 'text' | 'background';
+
+/** Which role a color property plays; undefined for anything else. */
+function roleOf(prop: string): Role | undefined {
+  if (prop === 'color') return 'text';
+  if (prop === 'background-color' || /^border(-(top|right|bottom|left))?-color$/.test(prop)) return 'background';
+  return undefined;
+}
+
+/**
+ * The client's recoloring of one declared color, or null when it leaves the
+ * color alone (or can't read it).
+ */
+export function recolor(strategy: DarkModeStrategy, value: string, role: Role): string | null {
+  const v = value.trim().toLowerCase();
+  if (v === 'transparent' || v === 'currentcolor' || v === 'inherit') return null;
+  const c = parseColor(v);
+  if (!c || c.a === 0) return null;
+  if (strategy === 'full-invert') return flipLightness(v);
+  if (strategy !== 'partial-invert') return null;
+  const { l } = rgbToHsl(c);
+  if (role === 'background' ? l > 0.5 : l < 0.5) return flipLightness(v);
+  return null;
+}
 
 /**
  * True if the element directly or transitively contains non-whitespace text,
@@ -70,13 +101,6 @@ function hasTextContent(node: Node, skip: (child: Node) => boolean = () => false
   return false;
 }
 
-function isUninvertible(value: string): boolean {
-  const v = value.trim().toLowerCase();
-  if (v === 'transparent' || v === 'currentcolor' || v === 'inherit') return true;
-  const c = parseColor(v);
-  return !c || c.a === 0;
-}
-
 /** Replace one token inside a shorthand value (e.g. the color in `background`). */
 function rewriteToken(token: RemoveToken, newText: string): void {
   const parsed = valueParser(token.parentDecl.value);
@@ -95,7 +119,7 @@ function rewriteToken(token: RemoveToken, newText: string): void {
 
 interface DarkMedia {
   sheet: StyleSheet;
-  at: import('postcss').AtRule;
+  at: AtRule;
 }
 
 /**
@@ -204,22 +228,60 @@ interface Pair {
   bgAfter?: string;
 }
 
-/** Simulate a client's automatic HSL lightness inversion of undeclared colors. */
-function autoInvert(ctx: StageContext, honorsPrefersDark: boolean): void {
+// Color attributes inverting clients recolor along with CSS.
+const COLOR_ATTRS: { attr: string; role: Role; tags?: string[] }[] = [
+  { attr: 'bgcolor', role: 'background' },
+  { attr: 'color', role: 'text', tags: ['font'] },
+  { attr: 'text', role: 'text', tags: ['body'] },
+];
+
+/**
+ * Recolor every declared color the way the client does, CSS and HTML
+ * attributes alike, except the author's own dark rules. Returns whether
+ * anything changed.
+ */
+function invertColors(ctx: StageContext, strategy: DarkModeStrategy, authorDark: DarkMedia[]): boolean {
   const pairs = new Map<Element, Pair>();
-  let inverted = 0;
+  const own = new Set<AtRule>(authorDark.map((m) => m.at));
+  const inAuthorDark = (d: ParsedDeclaration) => {
+    for (let p = d.decl.parent; p; p = p.parent as typeof p) {
+      if (own.has(p as AtRule)) return true;
+    }
+    return false;
+  };
+  const how = strategy === 'full-invert'
+    ? 'flips the lightness of every color'
+    : 'darkens light backgrounds and lightens dark text';
+  let changed = 0;
+
+  const track = (el: Element, role: Role, before: string, after: string, loc?: SourceLocation) => {
+    const p = pairs.get(el) ?? { loc };
+    if (role === 'text') {
+      p.colorBefore = before;
+      p.colorAfter = after;
+    } else {
+      p.bgBefore = before;
+      p.bgAfter = after;
+    }
+    pairs.set(el, p);
+  };
 
   for (const sheet of ctx.sheets) {
     for (const d of sheet.declarations) {
-      if (!COLOR_PROPS.has(d.prop)) continue;
-      if (isUninvertible(d.value)) continue;
-      const after = flipLightness(d.value);
+      const role = roleOf(d.prop);
+      if (!role || inAuthorDark(d)) continue;
+      const after = recolor(strategy, d.value, role);
+      // Inline text/background pairs feed the contrast check, changed or not.
+      if (d.origin === 'inline' && (d.prop === 'color' || d.prop === 'background-color')) {
+        const parsed = parseColor(d.value);
+        if (parsed && parsed.a > 0) track(d.element, role, d.value, after ?? d.value, d.loc);
+      }
       if (!after) continue;
-
-      applyInverted(d, after);
+      if (d.expandedFrom && !d.removeToken) continue; // no token to rewrite
+      if (d.expandedFrom) rewriteToken(d.removeToken!, after);
+      else d.decl.value = after;
       sheet.dirty = true;
-      inverted++;
-
+      changed++;
       ctx.mutations.push({
         client: ctx.clientId,
         stage: 'dark-mode',
@@ -228,50 +290,54 @@ function autoInvert(ctx: StageContext, honorsPrefersDark: boolean): void {
         feature: 'darkmode-auto-invert',
         severity: 'warning',
         reason:
-          `${ctx.profile.name} auto-inverts undeclared colors in dark mode: ` +
-          `\`${d.prop}: ${d.value}\` was rendered as \`${after}\` (lightness flipped, hue kept).`,
-        evidence: PREFERS_DARK_DOC,
-        fix: honorsPrefersDark
-          ? 'Add an @media (prefers-color-scheme: dark) block to set these colors ' +
-            'explicitly instead of letting the client invert them.'
-          : `${ctx.profile.name} ignores @media (prefers-color-scheme: dark), so pick ` +
-            'colors that stay readable when their lightness is flipped.',
+          `${ctx.profile.name} ${how} in dark mode: \`${d.prop}: ${d.value}\` was rendered ` +
+          `as \`${after}\` (hue kept).`,
+        evidence: DARK_MODE_DOC,
+        fix: supportFor(PREFERS_DARK_SLUG, ctx.clientId).status !== 'n'
+          ? 'Add an @media (prefers-color-scheme: dark) block to set these colors explicitly.'
+          : `${ctx.profile.name} ignores @media (prefers-color-scheme: dark), so pick colors ` +
+            'that stay readable when the client recolors them.',
       });
-
-      // Track color/background pairs on the same element (inline only) for contrast.
-      if (d.origin === 'inline' && (d.prop === 'color' || d.prop === 'background-color')) {
-        const p = pairs.get(d.element) ?? { loc: d.loc };
-        if (d.prop === 'color') {
-          p.colorBefore = d.value;
-          p.colorAfter = after;
-        } else {
-          p.bgBefore = d.value;
-          p.bgAfter = after;
-        }
-        pairs.set(d.element, p);
-      }
     }
   }
 
-  if (inverted === 0) return;
+  walkElements(ctx.parsed.document, (el) => {
+    for (const { attr, role, tags } of COLOR_ATTRS) {
+      if (tags && !tags.includes(el.tagName)) continue;
+      const a = getAttr(el, attr);
+      if (!a) continue;
+      const after = recolor(strategy, a.value, role);
+      if (parseColor(a.value)) track(el, role, a.value, after ?? a.value, attrLoc(el, attr));
+      if (!after) continue;
+      ctx.mutations.push({
+        client: ctx.clientId,
+        stage: 'dark-mode',
+        action: 'auto-invert-color',
+        target: { loc: attrLoc(el, attr) ?? elementLoc(el), element: el.tagName, property: attr, value: a.value },
+        feature: 'darkmode-auto-invert',
+        severity: 'warning',
+        reason:
+          `${ctx.profile.name} ${how} in dark mode: \`${attr}="${a.value}"\` was rendered as ` +
+          `\`${after}\` (hue kept).`,
+        evidence: DARK_MODE_DOC,
+      });
+      a.value = after;
+      changed++;
+    }
+  });
+
+  ctx.recolor = (value, role) => recolor(strategy, value, role) ?? value;
+  if (changed === 0) return false;
   flagContrastRegressions(ctx, pairs, hiddenElements(ctx));
   flagImageInversion(ctx);
+  return true;
 }
 
-function applyInverted(d: ParsedDeclaration, after: string): void {
-  if (d.expandedFrom) {
-    // Virtual longhand from a shorthand — rewrite just the color token.
-    if (d.removeToken) rewriteToken(d.removeToken, after);
-  } else {
-    d.decl.value = after;
-  }
-}
-
-/** The element itself or its nearest ancestor with a declared inline background. */
-function backgroundOf(el: Element, pairs: Map<Element, Pair>): Pair | undefined {
+/** The nearest declared color of a kind, on the element or an ancestor. */
+function inherited(el: Element, pairs: Map<Element, Pair>, kind: 'colorBefore' | 'bgBefore'): Pair | undefined {
   for (let n: Node | null = el; n; n = (n as { parentNode?: Node | null }).parentNode ?? null) {
     const p = pairs.get(n as Element);
-    if (p?.bgBefore) return p;
+    if (p?.[kind]) return p;
   }
   return undefined;
 }
@@ -298,21 +364,21 @@ function flagContrastRegressions(
   hidden: Set<Node>,
 ): void {
   for (const [el, p] of pairs) {
-    // No visible text → no readability concern. Without a declared color,
-    // only text that no descendant recolors is in this element's own color.
+    // No visible text → no readability concern. Text in a descendant that
+    // declares its own color is that descendant's pair.
     if (hidden.has(el)) continue;
     const skip = (n: Node) =>
-      hidden.has(n) || (!p.colorBefore && pairs.get(n as Element)?.colorBefore !== undefined);
+      hidden.has(n) || (n !== el && pairs.get(n as Element)?.colorBefore !== undefined);
     if (!hasTextContent(el, skip)) continue;
 
-    // The text sits on the nearest declared background, its own or an
-    // ancestor's. An undeclared member keeps its browser default and is NOT
-    // inverted; a declared member uses its before/after values.
-    const bg = backgroundOf(el, pairs);
-    const textBefore = parseColor(p.colorBefore ?? DEFAULT_TEXT);
-    const textAfter = parseColor(p.colorAfter ?? p.colorBefore ?? DEFAULT_TEXT);
-    const bgBefore = parseColor(bg?.bgBefore ?? DEFAULT_BG);
-    const bgAfter = parseColor(bg?.bgAfter ?? bg?.bgBefore ?? DEFAULT_BG);
+    // Text color and background are the nearest declared ones; undeclared,
+    // they are the browser defaults, which follow the dark scheme.
+    const text = inherited(el, pairs, 'colorBefore');
+    const bg = inherited(el, pairs, 'bgBefore');
+    const textBefore = parseColor(text?.colorBefore ?? LIGHT_TEXT);
+    const textAfter = parseColor(text?.colorAfter ?? DARK_TEXT);
+    const bgBefore = parseColor(bg?.bgBefore ?? LIGHT_BG);
+    const bgAfter = parseColor(bg?.bgAfter ?? DARK_BG);
     if (!textBefore || !textAfter || !bgBefore || !bgAfter) continue;
 
     const before = contrastRatio(textBefore, bgBefore);
@@ -326,17 +392,16 @@ function flagContrastRegressions(
           loc: p.loc ?? elementLoc(el),
           element: el.tagName,
           property: 'color',
-          value: `${p.colorAfter ?? p.colorBefore ?? DEFAULT_TEXT} on ${p.bgAfter ?? p.bgBefore ?? DEFAULT_BG}`,
+          value: `${text?.colorAfter ?? DARK_TEXT} on ${bg?.bgAfter ?? DARK_BG}`,
         },
         feature: 'darkmode-contrast',
         severity: 'error',
         reason:
-          `After ${ctx.profile.name}'s dark-mode inversion, the text/background pair on ` +
-          `<${el.tagName}> drops to ${after.toFixed(2)}:1 (was ${before.toFixed(2)}:1), below ` +
-          `the WCAG AA minimum of 4.5:1 — the text may become unreadable. ` +
-          `${p.colorBefore ? '' : 'The text color was undeclared, so it stays dark while the background flips.'}`,
+          `After ${ctx.profile.name}'s dark-mode recoloring, the text on <${el.tagName}> is ` +
+          `\`${text?.colorAfter ?? DARK_TEXT}\` on \`${bg?.bgAfter ?? DARK_BG}\`: ` +
+          `${after.toFixed(2)}:1 (was ${before.toFixed(2)}:1), below the WCAG AA minimum of 4.5:1.`,
         evidence: CONTRAST_DOC,
-        fix: 'Declare explicit dark-mode text AND background colors so the pair stays above 4.5:1.',
+        fix: 'Pick a text and background pair that stays above 4.5:1 once recolored, or set both explicitly for dark mode.',
       });
     }
   }
@@ -354,12 +419,12 @@ function flagImageInversion(ctx: StageContext): void {
     action: 'auto-invert-color',
     target: { loc: elementLoc(imgs[0]), element: 'img' },
     feature: 'darkmode-image-inversion',
-    severity: 'error',
+    severity: 'warning',
     reason:
-      `${ctx.profile.name} inverts background colors in dark mode. ${imgs.length} ` +
+      `${ctx.profile.name} recolors backgrounds in dark mode but not images. ${imgs.length} ` +
       `image${imgs.length === 1 ? '' : 's'} may be affected: a transparent PNG logo sitting on a ` +
-      `background that flips to dark can become invisible or gain a jarring halo.`,
-    evidence: OGSC_DOC,
+      `background that turns dark can become invisible or gain a jarring halo.`,
+    evidence: DARK_MODE_DOC,
     fix: 'Give logos a solid padded background, or use artwork that reads on both light and dark.',
   });
 }
@@ -384,7 +449,7 @@ function applyOgsc(ctx: StageContext): void {
     reason:
       `${ctx.profile.name} adds [data-ogsc]/[data-ogsb] attributes in dark mode, so your ` +
       `rules targeting them apply.`,
-    evidence: PREFERS_DARK_DOC,
+    evidence: DARK_MODE_DOC,
   });
 }
 
@@ -399,7 +464,7 @@ export function runDarkMode(ctx: StageContext): void {
     return;
   }
 
-  if (dm.strategy === 'unsupported') {
+  if (dm.strategy === 'none') {
     resolveSchemeMedia(ctx, 'light').forEach(hoist);
     hintColorScheme(ctx, 'light');
     ctx.mutations.push({
@@ -407,12 +472,12 @@ export function runDarkMode(ctx: StageContext): void {
       stage: 'dark-mode',
       action: 'warn-only',
       target: {},
-      feature: 'darkmode-unsupported',
+      feature: 'darkmode-no-change',
       severity: 'info',
       reason:
-        `${ctx.profile.name} has no dark mode: it renders the light design even when the ` +
-        `recipient's OS is set to dark. ${dm.note}`,
-      evidence: PREFERS_DARK_DOC,
+        `${ctx.profile.name} leaves the email's colors alone in dark mode: it shows the light ` +
+        `design. ${dm.note}`,
+      evidence: DARK_MODE_DOC,
     });
     return;
   }
@@ -422,12 +487,9 @@ export function runDarkMode(ctx: StageContext): void {
   hintColorScheme(ctx, 'dark');
 
   // Blocks the client does not support were already removed by the CSS filter.
-  const honorsPrefersDark = supportFor(PREFERS_DARK_SLUG, ctx.clientId).status !== 'n';
   const media = resolveSchemeMedia(ctx, 'dark');
-  const ogsc = dm.supportsOgscHack && hasOgsc(ctx);
-  if (ogsc) applyOgsc(ctx);
 
-  if (dm.strategy === 'native' || dm.strategy === 'partial') {
+  if (dm.strategy === 'native') {
     if (media.length) {
       applyPrefersDark(
         ctx,
@@ -435,8 +497,6 @@ export function runDarkMode(ctx: StageContext): void {
         `${ctx.profile.name} honors @media (prefers-color-scheme: dark); the author's dark ` +
           `declaration was applied.`,
       );
-    } else if (ogsc) {
-      return; // the author's [data-ogsc] rules are the dark design
     } else if (hasColorSchemeMeta(ctx) && supportFor(META_SLUG, ctx.clientId).status !== 'n') {
       ctx.mutations.push({
         client: ctx.clientId,
@@ -447,7 +507,8 @@ export function runDarkMode(ctx: StageContext): void {
         severity: 'info',
         reason:
           `${ctx.profile.name} respects your color-scheme meta, but the email declares no ` +
-          `@media (prefers-color-scheme: dark) styles, so the light design is kept as-is.`,
+          `@media (prefers-color-scheme: dark) styles: colors you set stay as they are, and ` +
+          `undeclared backgrounds and text turn dark and light.`,
         evidence: META_DOC,
       });
     } else {
@@ -459,24 +520,24 @@ export function runDarkMode(ctx: StageContext): void {
         feature: 'darkmode-keeps-light',
         severity: 'info',
         reason:
-          `${ctx.profile.name} does not force-invert colors. With no ` +
-          `@media (prefers-color-scheme: dark) styles, it keeps your light design in dark mode.`,
+          `${ctx.profile.name} does not recolor email in dark mode. With no ` +
+          `@media (prefers-color-scheme: dark) styles, colors you set stay as they are; ` +
+          `undeclared backgrounds and text turn dark and light.`,
         evidence: PREFERS_DARK_DOC,
       });
     }
     return;
   }
 
-  // auto-invert (Gmail, Yahoo)
+  // partial-invert / full-invert
+  invertColors(ctx, dm.strategy, media);
+  if (dm.supportsOgscHack && hasOgsc(ctx)) applyOgsc(ctx);
   if (media.length) {
     applyPrefersDark(
       ctx,
       media,
-      `${ctx.profile.name} used your @media (prefers-color-scheme: dark) styles instead of ` +
-        `auto-inverting.`,
+      `${ctx.profile.name} honors @media (prefers-color-scheme: dark); the author's dark ` +
+        `declaration was applied on top of its own recoloring.`,
     );
-    return;
   }
-  if (ogsc) return;
-  autoInvert(ctx, honorsPrefersDark);
 }

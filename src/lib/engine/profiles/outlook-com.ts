@@ -9,11 +9,11 @@ export const outlookCom: ClientProfile = {
   uaStylesheet: "body{font-family:'Segoe UI',Arial,sans-serif;}\ntable{border-collapse:collapse;}",
   quirks: {},
   darkMode: {
-    strategy: 'partial',
+    strategy: 'partial-invert',
     supportsOgscHack: true,
     note:
-      'Outlook.com honors @media (prefers-color-scheme: dark) but not the ' +
-      'color-scheme meta. It rewrites some colors on its own and marks them with ' +
-      '[data-ogsc]/[data-ogsb]; it does not blanket-invert.',
+      'Outlook.com darkens light backgrounds and lightens dark text, marking what it ' +
+      'changed with [data-ogsc]/[data-ogsb]. It also applies @media ' +
+      '(prefers-color-scheme: dark).',
   },
 };

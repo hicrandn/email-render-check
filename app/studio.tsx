@@ -406,8 +406,8 @@ export default function Studio() {
       .sort((a, b) => SEVERITY_RANK[a.issues[0].items[0].severity] - SEVERITY_RANK[b.issues[0].items[0].severity]);
   }, [result]);
 
-  // Outlook/Win never switches to dark — surface that instead of a fake preview.
-  const alwaysLight = previewScheme === 'dark' && PROFILES[active].darkMode.strategy === 'unsupported';
+  // Clients that leave colors alone show the light design on a dark screen.
+  const alwaysLight = previewScheme === 'dark' && PROFILES[active].darkMode.strategy === 'none';
 
   function scrollToLoc(mutation: Mutation) {
     const view = viewRef.current;
@@ -561,7 +561,7 @@ export default function Studio() {
 
             {alwaysLight && (
               <span className="shrink-0 self-center text-[11px] text-(--fg-muted)">
-                {shortName(active)} has no dark mode
+                {shortName(active)} keeps the light design
               </span>
             )}
             <div className="flex shrink-0 items-center gap-1.5 py-1.5">
