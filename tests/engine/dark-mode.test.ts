@@ -67,16 +67,47 @@ describe('dark mode: gmail with an author prefers-color-scheme block', () => {
     }
   </style></head><body><a class="btn">Go</a></body></html>`;
 
-  it('applies the author override and does NOT auto-invert', () => {
-    const { mutations } = simulate(html, 'gmail', DARK);
+  // caniemail: Gmail and Yahoo do not support prefers-color-scheme.
+  it.each(['gmail', 'yahoo'] as const)('%s drops the dark block and auto-inverts', (client) => {
+    const { mutations, html: out } = simulate(html, client, DARK);
+    const stripped = byFeature(mutations, 'css-at-media-prefers-color-scheme');
+    expect(stripped).toHaveLength(1);
+    expect(stripped[0].action).toBe('strip-dark-css');
+    expect(byFeature(mutations, 'darkmode-author-override')).toHaveLength(0);
+    expect(byFeature(mutations, 'darkmode-auto-invert').length).toBeGreaterThan(0);
+    expect(out).not.toContain('#0b1a3a');
+  });
+});
+
+describe('dark mode: outlook-com (partial)', () => {
+  it('applies author dark media queries', () => {
+    const html = `<style>@media (prefers-color-scheme: dark) { p { color:#eeeeee; } }</style><p>x</p>`;
+    const { mutations, html: out } = simulate(html, 'outlook-com', DARK);
     expect(byFeature(mutations, 'darkmode-author-override').length).toBeGreaterThan(0);
-    expect(byFeature(mutations, 'darkmode-auto-invert')).toHaveLength(0);
+    expect(out).not.toContain('@media');
   });
 
-  it('hoists the dark rules so they are unconditional in the output', () => {
-    const { html: out } = simulate(html, 'gmail', DARK);
-    expect(out).not.toContain('@media');
-    expect(out).toContain('#0b1a3a');
+  it('marks <body> with data-ogsc so [data-ogsc] rules match', () => {
+    const html = `<style>[data-ogsc] .t { color:#ffffff; }</style><p class="t">x</p>`;
+    const { mutations, html: out } = simulate(html, 'outlook-com', DARK);
+    expect(byFeature(mutations, 'darkmode-ogsc-applied')).toHaveLength(1);
+    expect(out).toMatch(/<body[^>]*data-ogsc/);
+  });
+
+  it('does not claim to honor the color-scheme meta', () => {
+    const html = '<meta name="color-scheme" content="light dark"><p>x</p>';
+    const { mutations } = simulate(html, 'outlook-com', DARK);
+    expect(byFeature(mutations, 'darkmode-meta-only')).toHaveLength(0);
+    expect(byFeature(mutations, 'darkmode-keeps-light')).toHaveLength(1);
+  });
+});
+
+describe('dark mode: gmail ignores [data-ogsc]', () => {
+  it('still auto-inverts', () => {
+    const html = `<style>[data-ogsc] .t { color:#ffffff; }</style><p class="t" style="color:#111111">x</p>`;
+    const { mutations } = simulate(html, 'gmail', DARK);
+    expect(byFeature(mutations, 'darkmode-ogsc-applied')).toHaveLength(0);
+    expect(byFeature(mutations, 'darkmode-auto-invert').length).toBeGreaterThan(0);
   });
 });
 

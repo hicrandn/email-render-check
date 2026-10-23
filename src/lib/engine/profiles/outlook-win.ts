@@ -19,9 +19,6 @@ export const outlookWin: ClientProfile = {
   },
   darkMode: {
     strategy: 'unsupported',
-    respectsColorSchemeMeta: false,
-    respectsPrefersColorScheme: false,
-    invertsUndeclaredColors: false,
     supportsOgscHack: false,
     note:
       'Outlook on Windows (Word engine) always renders the light design ' +

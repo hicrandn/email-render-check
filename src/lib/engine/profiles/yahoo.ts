@@ -11,12 +11,9 @@ export const yahoo: ClientProfile = {
   },
   darkMode: {
     strategy: 'auto-invert',
-    respectsColorSchemeMeta: false,
-    respectsPrefersColorScheme: false, // limited/unreliable
-    invertsUndeclaredColors: true,
     supportsOgscHack: false,
     note:
-      'Yahoo! Mail auto-inverts undeclared colors and has limited, unreliable ' +
-      '@media (prefers-color-scheme: dark) support, so author dark styles may not apply.',
+      'Yahoo! Mail ignores @media (prefers-color-scheme: dark) and auto-inverts ' +
+      'undeclared colors.',
   },
 };

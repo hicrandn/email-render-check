@@ -118,15 +118,11 @@ export interface ClientQuirks {
 
 export type DarkModeStrategy = 'native' | 'auto-invert' | 'partial' | 'unsupported';
 
+// Support for @media (prefers-color-scheme) and the color-scheme meta tag comes
+// from the caniemail snapshot, not from the profile.
 export interface DarkModeProfile {
   strategy: DarkModeStrategy;
-  /** Honors <meta name="color-scheme"> / supported-color-schemes. */
-  respectsColorSchemeMeta: boolean;
-  /** Honors @media (prefers-color-scheme: dark). */
-  respectsPrefersColorScheme: boolean;
-  /** The dangerous automatic inversion of undeclared colors (Gmail/Yahoo). */
-  invertsUndeclaredColors: boolean;
-  /** [data-ogsc] / [data-ogsb] attribute targeting works. */
+  /** Marks recolored elements with [data-ogsc] / [data-ogsb] that authors can target. */
   supportsOgscHack: boolean;
   note: string;
 }

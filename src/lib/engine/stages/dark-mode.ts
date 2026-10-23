@@ -5,11 +5,14 @@
 //   unsupported (Outlook/Win): render light; emit one info.
 //   native / partial (Apple Mail, Outlook.com): apply the author's
 //     prefers-color-scheme dark rules if present; otherwise keep light.
-//   auto-invert (Gmail, Yahoo): use the author's dark styles if present,
-//     otherwise simulate the client's automatic HSL lightness inversion of
-//     undeclared colors, and flag the contrast / image failures it causes.
+//   auto-invert (Gmail, Yahoo): simulate the client's automatic HSL lightness
+//     inversion of undeclared colors, and flag the contrast / image failures
+//     it causes.
+//
+// Whether a client honors @media (prefers-color-scheme) and the color-scheme
+// meta tag is read from caniemail, not assumed from the strategy.
 import valueParser from 'postcss-value-parser';
-import type { Declaration } from 'postcss';
+import type { Node as CssNode } from 'postcss';
 import type { SourceLocation } from '../types';
 import type { StageContext } from './context';
 import type { ParsedDeclaration, RemoveToken, StyleSheet } from '../parse/css';
@@ -27,9 +30,13 @@ import {
   type ParentNode,
 } from '../parse/html';
 import { contrastRatio, flipLightness, parseColor } from '../color';
+import { supportFor } from '../data/snapshot';
 
+const PREFERS_DARK_SLUG = 'css-at-media-prefers-color-scheme';
+const META_SLUG = 'html-meta-color-scheme';
 const PREFERS_DARK_DOC =
   'https://www.caniemail.com/features/css-at-media-prefers-color-scheme/';
+const META_DOC = 'https://www.caniemail.com/features/html-meta-color-scheme/';
 const OGSC_DOC =
   'https://www.litmus.com/blog/the-ultimate-guide-to-dark-mode-for-email-marketers';
 const CONTRAST_DOC = 'https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html';
@@ -69,7 +76,7 @@ function isUninvertible(value: string): boolean {
   return !c || c.a === 0;
 }
 
-function declLoc(ctx: StageContext, sheet: StyleSheet, node: Declaration): SourceLocation | undefined {
+function nodeLoc(ctx: StageContext, sheet: StyleSheet, node: CssNode): SourceLocation | undefined {
   const start = node.source?.start;
   if (!start) return undefined;
   const base = sheet.source.baseOffset;
@@ -160,7 +167,7 @@ function applyPrefersDark(ctx: StageContext, media: DarkMedia[], authorNote: str
         stage: 'dark-mode',
         action: 'apply-dark-override',
         target: {
-          loc: declLoc(ctx, sheet, decl),
+          loc: nodeLoc(ctx, sheet, decl),
           property: decl.prop.toLowerCase(),
           value: decl.value,
         },
@@ -184,7 +191,7 @@ interface Pair {
 }
 
 /** Simulate a client's automatic HSL lightness inversion of undeclared colors. */
-function autoInvert(ctx: StageContext): void {
+function autoInvert(ctx: StageContext, honorsPrefersDark: boolean): void {
   const pairs = new Map<Element, Pair>();
   let inverted = 0;
 
@@ -210,10 +217,11 @@ function autoInvert(ctx: StageContext): void {
           `${ctx.profile.name} auto-inverts undeclared colors in dark mode: ` +
           `\`${d.prop}: ${d.value}\` was rendered as \`${after}\` (lightness flipped, hue kept).`,
         evidence: PREFERS_DARK_DOC,
-        fix:
-          'Add an @media (prefers-color-scheme: dark) block' +
-          (ctx.profile.darkMode.supportsOgscHack ? ' (plus [data-ogsc] targeting for Gmail)' : '') +
-          ' to set these colors explicitly instead of letting the client invert them.',
+        fix: honorsPrefersDark
+          ? 'Add an @media (prefers-color-scheme: dark) block to set these colors ' +
+            'explicitly instead of letting the client invert them.'
+          : `${ctx.profile.name} ignores @media (prefers-color-scheme: dark), so pick ` +
+            'colors that stay readable when their lightness is flipped.',
       });
 
       // Track color/background pairs on the same element (inline only) for contrast.
@@ -302,7 +310,55 @@ function flagImageInversion(ctx: StageContext): void {
       `image${imgs.length === 1 ? '' : 's'} may be affected: a transparent PNG logo sitting on a ` +
       `background that flips to dark can become invisible or gain a jarring halo.`,
     evidence: OGSC_DOC,
-    fix: 'Give logos a solid padded background, or swap to a dark-safe asset via [data-ogsc].',
+    fix: 'Give logos a solid padded background, or use artwork that reads on both light and dark.',
+  });
+}
+
+/**
+ * The client rewrites `@media (prefers-color-scheme)` into a query that never
+ * matches (Gmail: `@media ( _filtered_a )`), so the author's dark rules drop out.
+ */
+function stripPrefersDark(ctx: StageContext, media: DarkMedia[], notes: string[]): void {
+  for (const { sheet, at } of media) {
+    ctx.mutations.push({
+      client: ctx.clientId,
+      stage: 'dark-mode',
+      action: 'strip-dark-css',
+      target: { loc: nodeLoc(ctx, sheet, at), selector: `@media ${at.params}` },
+      feature: PREFERS_DARK_SLUG,
+      severity: 'warning',
+      reason:
+        `${ctx.profile.name} does not support @media (prefers-color-scheme), so the ` +
+        `\`@media ${at.params}\` block never applies.` +
+        (notes.length ? ` Notes: ${notes.join(' ')}` : ''),
+      evidence: PREFERS_DARK_DOC,
+    });
+    at.remove();
+    sheet.dirty = true;
+  }
+}
+
+/**
+ * Outlook.com marks the elements it recolors with data-ogsc / data-ogsb.
+ * Marking <body> is enough for the usual `[data-ogsc] .x {}` rules to match.
+ */
+function applyOgsc(ctx: StageContext): void {
+  const body = findElement(ctx.parsed.document, 'body');
+  if (!body) return;
+  for (const name of ['data-ogsc', 'data-ogsb']) {
+    if (!getAttr(body, name)) body.attrs.push({ name, value: '' });
+  }
+  ctx.mutations.push({
+    client: ctx.clientId,
+    stage: 'dark-mode',
+    action: 'apply-dark-override',
+    target: {},
+    feature: 'darkmode-ogsc-applied',
+    severity: 'info',
+    reason:
+      `${ctx.profile.name} adds [data-ogsc]/[data-ogsb] attributes in dark mode, so your ` +
+      `rules targeting them apply.`,
+    evidence: PREFERS_DARK_DOC,
   });
 }
 
@@ -337,7 +393,15 @@ export function runDarkMode(ctx: StageContext): void {
   // default background goes dark regardless of what the author declared.
   hintColorScheme(ctx, 'dark');
 
-  const media = collectPrefersDark(ctx);
+  const prefers = supportFor(PREFERS_DARK_SLUG, ctx.clientId);
+  const honorsPrefersDark = prefers.status !== 'n';
+  let media = collectPrefersDark(ctx);
+  if (media.length && !honorsPrefersDark) {
+    stripPrefersDark(ctx, media, prefers.notes);
+    media = [];
+  }
+  const ogsc = dm.supportsOgscHack && hasOgsc(ctx);
+  if (ogsc) applyOgsc(ctx);
 
   if (dm.strategy === 'native' || dm.strategy === 'partial') {
     if (media.length) {
@@ -347,7 +411,9 @@ export function runDarkMode(ctx: StageContext): void {
         `${ctx.profile.name} honors @media (prefers-color-scheme: dark); the author's dark ` +
           `declaration was applied.`,
       );
-    } else if (hasColorSchemeMeta(ctx)) {
+    } else if (ogsc) {
+      return; // the author's [data-ogsc] rules are the dark design
+    } else if (hasColorSchemeMeta(ctx) && supportFor(META_SLUG, ctx.clientId).status !== 'n') {
       ctx.mutations.push({
         client: ctx.clientId,
         stage: 'dark-mode',
@@ -358,7 +424,7 @@ export function runDarkMode(ctx: StageContext): void {
         reason:
           `${ctx.profile.name} respects your color-scheme meta, but the email declares no ` +
           `@media (prefers-color-scheme: dark) styles, so the light design is kept as-is.`,
-        evidence: PREFERS_DARK_DOC,
+        evidence: META_DOC,
       });
     } else {
       ctx.mutations.push({
@@ -387,20 +453,6 @@ export function runDarkMode(ctx: StageContext): void {
     );
     return;
   }
-  if (dm.supportsOgscHack && hasOgsc(ctx)) {
-    ctx.mutations.push({
-      client: ctx.clientId,
-      stage: 'dark-mode',
-      action: 'apply-dark-override',
-      target: {},
-      feature: 'darkmode-ogsc-applied',
-      severity: 'info',
-      reason:
-        `${ctx.profile.name} applies your [data-ogsc]/[data-ogsb] dark overrides, so it does ` +
-        `not auto-invert those elements.`,
-      evidence: OGSC_DOC,
-    });
-    return;
-  }
-  autoInvert(ctx);
+  if (ogsc) return;
+  autoInvert(ctx, honorsPrefersDark);
 }

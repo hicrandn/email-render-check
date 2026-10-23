@@ -11,12 +11,10 @@ export const outlookCom: ClientProfile = {
   },
   darkMode: {
     strategy: 'partial',
-    respectsColorSchemeMeta: true,
-    respectsPrefersColorScheme: true,
-    invertsUndeclaredColors: false,
-    supportsOgscHack: false,
+    supportsOgscHack: true,
     note:
-      'Outlook.com honors @media (prefers-color-scheme: dark) and color-scheme ' +
-      'meta, but rewrites some colors on its own; it does not blanket-invert.',
+      'Outlook.com honors @media (prefers-color-scheme: dark) but not the ' +
+      'color-scheme meta. It rewrites some colors on its own and marks them with ' +
+      '[data-ogsc]/[data-ogsb]; it does not blanket-invert.',
   },
 };

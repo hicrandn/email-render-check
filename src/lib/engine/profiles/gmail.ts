@@ -12,13 +12,9 @@ export const gmail: ClientProfile = {
   },
   darkMode: {
     strategy: 'auto-invert',
-    respectsColorSchemeMeta: false,
-    respectsPrefersColorScheme: true, // inconsistent across builds
-    invertsUndeclaredColors: true,
-    supportsOgscHack: true, // [data-ogsc]/[data-ogsb] works in many builds
+    supportsOgscHack: false,
     note:
-      'Gmail applies partial, inconsistent dark-mode handling: it honors some ' +
-      '@media (prefers-color-scheme: dark) rules but auto-inverts undeclared ' +
-      'colors on many surfaces. [data-ogsc]/[data-ogsb] targeting works in most builds.',
+      'Gmail ignores @media (prefers-color-scheme: dark) and the color-scheme ' +
+      'meta, and auto-inverts colors on many surfaces.',
   },
 };

@@ -9,12 +9,9 @@ export const appleMail: ClientProfile = {
   quirks: {},
   darkMode: {
     strategy: 'native',
-    respectsColorSchemeMeta: true,
-    respectsPrefersColorScheme: true,
-    invertsUndeclaredColors: false,
     supportsOgscHack: false,
     note:
-      'Apple Mail fully supports color-scheme meta and ' +
+      'Apple Mail supports the color-scheme meta and ' +
       '@media (prefers-color-scheme: dark); it never force-inverts author colors.',
   },
 };
