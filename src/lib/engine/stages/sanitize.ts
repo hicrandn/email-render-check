@@ -1,10 +1,10 @@
-// Sanitize stage: removes or unwraps HTML elements the target client does not
-// support (per the caniemail `html` category), plus a universal security list
-// (script/iframe/embed) that is stripped for every client.
+// Sanitize stage: removes or unwraps HTML elements and attributes the target
+// client does not support (per the caniemail `html` and `image` categories),
+// plus a universal security list (script/iframe/embed) stripped for every client.
 //
 //   - default action for an unsupported element:   unwrap-element (keep children)
 //   - REMOVE_WHEN_UNSUPPORTED / SECURITY_ALWAYS:    remove-element (drop subtree)
-//   - unsupported attribute:                        remove-attribute
+//   - unsupported attribute or <img> format:        remove-attribute
 //   - partial support (a):                          warn-only (kept)
 import type { Mutation } from '../types';
 import { featureBySlug } from '../data/snapshot';
@@ -138,15 +138,65 @@ const ATTRIBUTE_SLUG: Record<string, string> = {
   width: 'html-width',
 };
 
-function attributeSlug(el: Element, attr: Attribute): string | undefined {
-  if (attr.name === 'href') {
-    if (el.tagName !== 'a') return undefined;
-    const href = attr.value.trim().toLowerCase();
-    if (href.startsWith('#')) return 'html-anchor-links';
-    if (href.startsWith('mailto:')) return 'html-mailto-links';
-    return undefined;
+/** Image formats caniemail tracks, by file extension and by data: URI MIME type. */
+const IMAGE_EXTENSION_SLUG: Record<string, string> = {
+  apng: 'image-apng',
+  avif: 'image-avif',
+  bmp: 'image-bmp',
+  gif: 'image-gif',
+  hdr: 'image-hdr',
+  heic: 'image-heif',
+  heif: 'image-heif',
+  ico: 'image-ico',
+  jpeg: 'image-jpg',
+  jpg: 'image-jpg',
+  mp4: 'image-mp4',
+  png: 'image-png',
+  svg: 'image-svg',
+  tif: 'image-tiff',
+  tiff: 'image-tiff',
+  webp: 'image-webp',
+};
+const IMAGE_MIME_SLUG: Record<string, string> = {
+  'image/apng': 'image-apng',
+  'image/avif': 'image-avif',
+  'image/bmp': 'image-bmp',
+  'image/gif': 'image-gif',
+  'image/heic': 'image-heif',
+  'image/heif': 'image-heif',
+  'image/jpeg': 'image-jpg',
+  'image/png': 'image-png',
+  'image/svg+xml': 'image-svg',
+  'image/tiff': 'image-tiff',
+  'image/vnd.microsoft.icon': 'image-ico',
+  'image/webp': 'image-webp',
+  'image/x-icon': 'image-ico',
+  'video/mp4': 'image-mp4',
+};
+
+function imageSlugs(src: string): string[] {
+  const value = src.trim().toLowerCase();
+  if (value.startsWith('data:')) {
+    const mime = IMAGE_MIME_SLUG[value.slice(5).split(/[;,]/)[0]];
+    return mime ? ['image-base64', mime] : ['image-base64'];
   }
-  return ATTRIBUTE_SLUG[attr.name];
+  const ext = /\.([a-z0-9]+)$/.exec(value.split(/[?#]/)[0])?.[1];
+  const slug = ext ? IMAGE_EXTENSION_SLUG[ext] : undefined;
+  return slug ? [slug] : [];
+}
+
+/** caniemail slugs an attribute relies on, most specific first. */
+function attributeSlugs(el: Element, attr: Attribute): string[] {
+  if (attr.name === 'href') {
+    if (el.tagName !== 'a') return [];
+    const href = attr.value.trim().toLowerCase();
+    if (href.startsWith('#')) return ['html-anchor-links'];
+    if (href.startsWith('mailto:')) return ['html-mailto-links'];
+    return [];
+  }
+  if (attr.name === 'src' && el.tagName === 'img') return imageSlugs(attr.value);
+  const slug = ATTRIBUTE_SLUG[attr.name];
+  return slug ? [slug] : [];
 }
 
 /** Structural elements the engine must never touch. */
@@ -263,36 +313,48 @@ export function runSanitize(ctx: StageContext): void {
 
   // Attributes, on the elements that are left.
   walkElements(parsed.document, (el) => {
-    for (const attr of [...el.attrs]) {
-      const slug = attributeSlug(el, attr);
-      const feature = slug ? featureBySlug.get(slug) : undefined;
-      if (!slug || !feature) continue;
-      const support = feature.support[clientId];
-      if (support.status !== 'n' && support.status !== 'a') continue;
-      const removed = support.status === 'n';
-      if (removed) el.attrs.splice(el.attrs.indexOf(attr), 1);
-      ctx.mutations.push({
-        client: clientId,
-        stage: 'sanitize',
-        action: removed ? 'remove-attribute' : 'warn-only',
-        target: {
-          element: el.tagName,
-          loc: attrLoc(el, attr.name) ?? elementLoc(el),
-          property: attr.name,
-          value: attr.value,
-        },
-        feature: slug,
-        severity: removed ? 'error' : 'warning',
-        reason:
-          (removed
-            ? `${ctx.profile.name} does not support ${feature.title}. \`${attr.name}\` was ` +
-              `removed from <${el.tagName}>.`
-            : `${ctx.profile.name} has partial support for ${feature.title}. \`${attr.name}\` ` +
-              `on <${el.tagName}> was kept.`) + appendNotes(support.notes),
-        evidence: feature.url,
-      });
-    }
+    for (const attr of [...el.attrs]) checkAttribute(ctx, el, attr);
   });
+}
+
+function checkAttribute(ctx: StageContext, el: Element, attr: Attribute): void {
+  const warns: Mutation[] = [];
+  for (const slug of attributeSlugs(el, attr)) {
+    const feature = featureBySlug.get(slug);
+    if (!feature) continue;
+    const support = feature.support[ctx.clientId];
+    if (support.status !== 'n' && support.status !== 'a') continue;
+    const removed = support.status === 'n';
+    // An image the client cannot show: dropping src shows what the reader gets.
+    const consequence = attr.name === 'src' ? ', so the image does not display' : '';
+    const mutation: Mutation = {
+      client: ctx.clientId,
+      stage: 'sanitize',
+      action: removed ? 'remove-attribute' : 'warn-only',
+      target: {
+        element: el.tagName,
+        loc: attrLoc(el, attr.name) ?? elementLoc(el),
+        property: attr.name,
+        value: attr.value,
+      },
+      feature: slug,
+      severity: removed ? 'error' : 'warning',
+      reason:
+        (removed
+          ? `${ctx.profile.name} does not support ${feature.title}. \`${attr.name}\` was ` +
+            `removed from <${el.tagName}>${consequence}.`
+          : `${ctx.profile.name} has partial support for ${feature.title}. \`${attr.name}\` ` +
+            `on <${el.tagName}> was kept.`) + appendNotes(support.notes),
+      evidence: feature.url,
+    };
+    if (removed) {
+      el.attrs.splice(el.attrs.indexOf(attr), 1);
+      ctx.mutations.push(mutation);
+      return; // first unsupported slug wins; the attribute is gone
+    }
+    warns.push(mutation);
+  }
+  ctx.mutations.push(...warns);
 }
 
 /**

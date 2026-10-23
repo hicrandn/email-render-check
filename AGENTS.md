@@ -33,7 +33,8 @@ pnpm update-caniemail   # refresh src/lib/engine/data/caniemail.json
 - `src/lib/engine/` — pure TypeScript, no DOM or Next.js imports.
   `simulate(html, clientId, context)` in `engine.ts` runs:
   1. `parse/` — parse5 HTML and postcss CSS ASTs with source locations
-  2. `stages/sanitize.ts` — drop or unwrap unsupported elements
+  2. `stages/sanitize.ts` — drop or unwrap unsupported elements, attributes
+     and `<img>` formats
   3. `stages/css-filter.ts` (+ `css-rules.ts` for at-rules) — remove
      unsupported CSS per Can I Email
   4. `stages/defaults.ts` — inject the client's UA stylesheet

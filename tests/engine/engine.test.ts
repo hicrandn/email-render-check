@@ -346,3 +346,32 @@ describe('sanitize: semantics, lists, style, doctype', () => {
     expect(out).toMatch(/^<!DOCTYPE html>/);
   });
 });
+
+describe('sanitize: image formats', () => {
+  it('drops a base64 image src in gmail', () => {
+    const { html: out, mutations } = simulate('<img src="data:image/png;base64,AAAA" alt="logo">', 'gmail');
+    const m = byFeature(mutations, 'image-base64');
+    expect(m[0].action).toBe('remove-attribute');
+    expect(m[0].reason).toContain('does not display');
+    expect(out).not.toContain('data:image');
+    expect(out).toContain('alt="logo"');
+  });
+
+  it('drops a WebP src in outlook-win, even with a query string', () => {
+    const { mutations } = simulate('<img src="https://cdn.example.com/a.webp?v=2">', 'outlook-win');
+    expect(byFeature(mutations, 'image-webp')[0].action).toBe('remove-attribute');
+  });
+
+  it('warns on SVG images in gmail (partial) and keeps them', () => {
+    const { html: out, mutations } = simulate('<img src="logo.svg">', 'gmail');
+    expect(byFeature(mutations, 'image-svg')[0].action).toBe('warn-only');
+    expect(out).toContain('logo.svg');
+  });
+
+  it('leaves PNG and JPEG alone everywhere', () => {
+    for (const client of ['gmail', 'outlook-win', 'outlook-com', 'apple-mail', 'yahoo'] as const) {
+      const { mutations } = simulate('<img src="a.png"><img src="b.JPG">', client);
+      expect(mutations.filter((m) => m.feature.startsWith('image-'))).toHaveLength(0);
+    }
+  });
+});
