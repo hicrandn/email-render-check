@@ -382,3 +382,27 @@ describe('sanitize: implied elements', () => {
     expect(byFeature(simulate('<body><p>x</p></body>', 'gmail').mutations, 'html-body')).toHaveLength(1);
   });
 });
+
+describe('phone clients', () => {
+  it('Outlook app keeps flex and border-radius that Outlook on Windows drops', () => {
+    const html = '<div style="display:flex;border-radius:8px">x</div>';
+    expect(byFeature(simulate(html, 'outlook-win').mutations, 'css-display-flex')).toHaveLength(1);
+    const { html: out, mutations } = simulate(html, 'outlook-mobile');
+    expect(byFeature(mutations, 'css-display-flex')).toHaveLength(0);
+    expect(out).toContain('border-radius:8px');
+  });
+
+  it('Outlook app applies prefers-color-scheme in dark mode', () => {
+    const html = '<style>@media (prefers-color-scheme: dark){ p { color:#eeeeee; } }</style><p>x</p>';
+    const { html: out } = simulate(html, 'outlook-mobile', { colorScheme: 'dark', viewportWidth: 375 });
+    expect(out).toContain('#eeeeee');
+  });
+
+  it('every phone client has a profile on the mobile device', async () => {
+    const { PROFILES, CLIENTS_BY_DEVICE, clientOn } = await import('@/src/lib/engine/profiles');
+    for (const id of CLIENTS_BY_DEVICE.mobile) expect(PROFILES[id].device).toBe('mobile');
+    expect(clientOn('mobile', 'outlook-com')).toBe('outlook-mobile');
+    expect(clientOn('desktop', 'outlook-mobile')).toBe('outlook-win');
+    expect(clientOn('desktop', 'gmail')).toBe('gmail');
+  });
+});

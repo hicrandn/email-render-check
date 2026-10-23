@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { snapshot, featureBySlug } from '@/src/lib/engine/data/snapshot';
-import { CLIENT_IDS } from '@/src/lib/engine/types';
+import { CLIENT_IDS, DESKTOP_CLIENT_IDS, MOBILE_CLIENT_IDS } from '@/src/lib/engine/types';
 import { SLUG_MAP, UNMAPPED } from '@/src/lib/engine/data/slug-map';
 
 const clientSupportSchema = z.object({
@@ -17,13 +17,7 @@ const featureSchema = z.object({
   category: z.enum(['css', 'html', 'image', 'others']),
   url: z.string().url(),
   keywords: z.string(),
-  support: z.object({
-    gmail: clientSupportSchema,
-    'outlook-win': clientSupportSchema,
-    'outlook-com': clientSupportSchema,
-    'apple-mail': clientSupportSchema,
-    yahoo: clientSupportSchema,
-  }),
+  support: z.object(Object.fromEntries(CLIENT_IDS.map((c) => [c, clientSupportSchema]))),
 });
 
 const snapshotSchema = z.object({
@@ -38,7 +32,7 @@ describe('caniemail snapshot', () => {
     expect(() => snapshotSchema.parse(snapshot)).not.toThrow();
   });
 
-  it('resolves all 5 clients for every feature', () => {
+  it('has an entry for every client on every feature', () => {
     for (const feature of snapshot.features) {
       for (const client of CLIENT_IDS) {
         expect(feature.support[client]).toBeDefined();
@@ -46,13 +40,30 @@ describe('caniemail snapshot', () => {
     }
   });
 
-  it('reports no unresolved client mappings', () => {
+  it('reports no unresolved desktop client mappings', () => {
     const unresolved = snapshot.features.flatMap((f) =>
-      CLIENT_IDS.filter((c) => f.support[c].resolution === 'unresolved').map(
+      DESKTOP_CLIENT_IDS.filter((c) => f.support[c].resolution === 'unresolved').map(
         (c) => `${f.slug}:${c}`,
       ),
     );
     expect(unresolved).toEqual([]);
+  });
+
+  // A few features were only tested on webmail; those stay unknown on phones.
+  it('resolves nearly every feature for the phone apps', () => {
+    for (const c of MOBILE_CLIENT_IDS) {
+      const unresolved = snapshot.features.filter((f) => f.support[c].resolution === 'unresolved');
+      expect(unresolved.length).toBeLessThan(snapshot.features.length * 0.02);
+    }
+  });
+
+  it('keeps the worse of iOS and Android, noting the difference', () => {
+    // caniemail: box-shadow is partial in the Gmail apps.
+    const shadow = featureBySlug.get('css-box-shadow')!.support['gmail-mobile'];
+    expect(shadow.status).not.toBe('y');
+    // display:flex differs between the Gmail apps' platforms or is partial.
+    const flex = featureBySlug.get('css-display-flex')!.support['gmail-mobile'];
+    expect(['a', 'n']).toContain(flex.status);
   });
 
   it('reports display:flex as unsupported (n) for outlook-win', () => {

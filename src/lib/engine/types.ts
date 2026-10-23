@@ -1,19 +1,29 @@
 // Core engine types. Pure TypeScript — no Next.js / DOM dependencies.
 
-export type ClientId =
-  | 'gmail'
-  | 'outlook-win'
-  | 'outlook-com'
-  | 'apple-mail'
-  | 'yahoo';
+export type Device = 'desktop' | 'mobile';
 
-export const CLIENT_IDS: ClientId[] = [
+export const DESKTOP_CLIENT_IDS = [
   'gmail',
   'outlook-win',
   'outlook-com',
   'apple-mail',
   'yahoo',
-];
+] as const;
+
+// Phone apps. Each is tested on iOS and Android by caniemail (Apple Mail on
+// iOS only); the snapshot keeps the worse of the two.
+export const MOBILE_CLIENT_IDS = [
+  'gmail-mobile',
+  'outlook-mobile',
+  'apple-mail-ios',
+  'yahoo-mobile',
+] as const;
+
+export type ClientId =
+  | (typeof DESKTOP_CLIENT_IDS)[number]
+  | (typeof MOBILE_CLIENT_IDS)[number];
+
+export const CLIENT_IDS: ClientId[] = [...DESKTOP_CLIENT_IDS, ...MOBILE_CLIENT_IDS];
 
 /** caniemail raw support codes: y=supported, n=unsupported, a=partial, u=unknown. */
 export type SupportCode = 'y' | 'n' | 'a' | 'u';
@@ -125,6 +135,7 @@ export interface DarkModeProfile {
 
 export interface ClientProfile {
   id: ClientId;
+  device: Device;
   /** Human-readable client name (used in mutation reasons). */
   name: string;
   /** The rendering engine, which explains the "why" behind many quirks. */
