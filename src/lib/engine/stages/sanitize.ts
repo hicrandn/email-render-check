@@ -1,6 +1,6 @@
 // Sanitize stage: removes or unwraps HTML elements the target client does not
 // support (per the caniemail `html` category), plus a universal security list
-// (script/iframe/…) that is stripped for every client.
+// (script/iframe/embed) that is stripped for every client.
 //
 //   - default action for an unsupported element:   unwrap-element (keep children)
 //   - REMOVE_WHEN_UNSUPPORTED / SECURITY_ALWAYS:    remove-element (drop subtree)
@@ -22,6 +22,7 @@ const ELEMENT_SLUG: Record<string, string> = {
   acronym: 'html-acronym',
   address: 'html-address',
   audio: 'html-audio',
+  base: 'html-base',
   bdi: 'html-bdi',
   blockquote: 'html-blockquote',
   button: 'html-button-submit',
@@ -36,8 +37,10 @@ const ELEMENT_SLUG: Record<string, string> = {
   hr: 'html-hr',
   img: 'html-img',
   input: 'html-input-text',
+  link: 'html-link',
   marquee: 'html-marquee',
   meter: 'html-meter',
+  object: 'html-object',
   p: 'html-p',
   picture: 'html-picture',
   pre: 'html-pre',
@@ -57,14 +60,16 @@ const ELEMENT_SLUG: Record<string, string> = {
   wbr: 'html-wbr',
 };
 
-/** Always removed entirely, for every client — security / active content. */
-const SECURITY_ALWAYS = new Set([
-  'script', 'iframe', 'object', 'embed', 'base', 'link',
-]);
+/**
+ * Always removed entirely, for every client — active content caniemail has no
+ * entry for. <link>, <base> and <object> do have entries and follow the data.
+ */
+const SECURITY_ALWAYS = new Set(['script', 'iframe', 'embed']);
 
 /** When caniemail marks these unsupported, remove the whole subtree (not unwrap). */
 const REMOVE_WHEN_UNSUPPORTED = new Set([
   'form', 'input', 'select', 'textarea', 'button', 'video', 'audio', 'svg', 'dialog',
+  'link', 'base', 'object',
 ]);
 
 /** Structural elements the engine must never touch. */

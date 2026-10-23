@@ -102,6 +102,30 @@ describe('sanitize: unwrap preserves content', () => {
   });
 });
 
+describe('sanitize: <link> and <base> follow caniemail', () => {
+  const link = '<link rel="stylesheet" href="a.css"><p>x</p>';
+
+  it.each(['apple-mail', 'outlook-win'] as const)('keeps <link> in %s', (client) => {
+    const { html: out, mutations } = simulate(link, client);
+    expect(out).toContain('<link');
+    expect(mutations.filter((m) => m.target.element === 'link')).toHaveLength(0);
+  });
+
+  it('removes <link> in gmail with the html-link evidence', () => {
+    const { html: out, mutations } = simulate(link, 'gmail');
+    expect(out).not.toContain('<link');
+    const m = byFeature(mutations, 'html-link');
+    expect(m).toHaveLength(1);
+    expect(m[0].action).toBe('remove-element');
+  });
+
+  it('warns on <base> in gmail (partial) and keeps it', () => {
+    const { html: out, mutations } = simulate('<base href="https://example.com/"><p>x</p>', 'gmail');
+    expect(out).toContain('<base');
+    expect(byFeature(mutations, 'html-base')[0].action).toBe('warn-only');
+  });
+});
+
 describe('determinism', () => {
   it('produces byte-identical output across repeated runs', () => {
     const html = fixture('newsletter.html');
