@@ -14,8 +14,7 @@
  * `PROPERTY_LEVEL` overrides that for slugs that cover several properties
  * (longhands, logical properties) or whose name is not a property.
  * Anything that is NOT a plain declaration property (selectors, pseudo-classes,
- * at-rules, and a handful of meta slugs) is intentionally kept in `UNMAPPED` —
- * never silently swallowed.
+ * at-rules, nesting) is kept in `UNMAPPED` and checked by stages/css-rules.ts.
  */
 import { cssSlugs } from './snapshot';
 

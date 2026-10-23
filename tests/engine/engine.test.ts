@@ -231,3 +231,55 @@ describe('css-filter: variables, !important and keywords', () => {
     expect(out).not.toContain('initial');
   });
 });
+
+describe('css-filter: selectors and nesting', () => {
+  it('removes a rule whose only selector uses :nth-child in gmail', () => {
+    const { html: out, mutations } = simulate(
+      '<style>tr:nth-child(2n){color:red}</style><p>x</p>',
+      'gmail',
+    );
+    expect(byFeature(mutations, 'css-pseudo-class-nth-child')[0].action).toBe('remove-rule');
+    expect(out).not.toContain('nth-child');
+  });
+
+  it('drops only the unsupported selector from a list', () => {
+    const { html: out } = simulate('<style>p, li:first-child{color:red}</style><p>x</p>', 'gmail');
+    expect(out).toContain('p{color:red}');
+    expect(out).not.toContain('first-child');
+  });
+
+  it('keeps :hover for gmail and removes it for outlook-win', () => {
+    const html = '<style>a:hover{color:red}</style><a>x</a>';
+    expect(simulate(html, 'gmail').html).toContain('a:hover');
+    expect(simulate(html, 'outlook-win').html).not.toContain('a:hover');
+  });
+
+  it('treats single-colon :before as the ::before pseudo-element', () => {
+    const { mutations } = simulate('<style>p:before{content:"x"}</style><p>x</p>', 'gmail');
+    expect(byFeature(mutations, 'css-pseudo-element-before')).toHaveLength(1);
+  });
+
+  it('flags chained classes (.a.b) in outlook-com but not td.a', () => {
+    const chained = simulate('<style>.a.b{color:red}</style><p>x</p>', 'outlook-com');
+    expect(byFeature(chained.mutations, 'css-selector-chaining')).toHaveLength(1);
+    const typed = simulate('<style>td.a{color:red}</style><p>x</p>', 'outlook-com');
+    expect(byFeature(typed.mutations, 'css-selector-chaining')).toHaveLength(0);
+  });
+
+  it('removes the child combinator in outlook-win, not the descendant one', () => {
+    const { html: out } = simulate('<style>div > p{color:red} div p{color:blue}</style><p>x</p>', 'outlook-win');
+    expect(out).not.toContain('div > p');
+    expect(out).toContain('div p{color:blue}');
+  });
+
+  it('removes nested rules in gmail', () => {
+    const { mutations, html: out } = simulate('<style>.a{color:red; .b{color:blue}}</style><p>x</p>', 'gmail');
+    expect(byFeature(mutations, 'css-nesting')[0].action).toBe('remove-rule');
+    expect(out).not.toContain('.b');
+  });
+
+  it('leaves @keyframes selectors alone', () => {
+    const { mutations } = simulate('<style>@keyframes s{from{opacity:0}to{opacity:1}}</style><p>x</p>', 'apple-mail');
+    expect(mutations.filter((m) => m.feature.startsWith('css-selector'))).toHaveLength(0);
+  });
+});
