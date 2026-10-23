@@ -12,7 +12,6 @@ export const outlookWin: ClientProfile = {
     'img{-ms-interpolation-mode:bicubic;}',
   ].join('\n'),
   quirks: {
-    ignoresMediaQueries: true,
     ignoresMaxWidth: true,
     unreliablePercentWidth: true,
     unreliableBlockMargin: true,

@@ -1,5 +1,6 @@
 // CSS filter stage: matches every parsed declaration against the client's
-// caniemail support status via the slug map.
+// caniemail support status via the slug map. At-rules are checked first, in
+// css-rules.ts.
 //
 //   n (unsupported) -> remove-property / remove-value; the declaration (or the
 //                      offending token) is actually removed from the output.
@@ -18,8 +19,9 @@ import {
   type KeywordMapping,
   type SlugMapping,
 } from '../data/slug-map';
-import { removeTokenFromDecl, type ParsedDeclaration } from '../parse/css';
+import { isAttached, removeTokenFromDecl, type ParsedDeclaration } from '../parse/css';
 import type { StageContext } from './context';
+import { runCssRuleFilter } from './css-rules';
 
 interface ValueAnalysis {
   keywords: Set<string>;
@@ -98,11 +100,14 @@ function findMatches(decl: ParsedDeclaration, analysis: ValueAnalysis): Match[] 
 
 export function runCssFilter(ctx: StageContext): void {
   const { clientId } = ctx;
+  runCssRuleFilter(ctx);
   // Declarations removed as whole nodes; skip token-level edits against them.
   const removed = new WeakSet<object>();
 
   for (const sheet of ctx.sheets) {
+    const dropped = new Set<ParsedDeclaration>();
     for (const decl of sheet.declarations) {
+      if (!isAttached(sheet, decl.decl)) continue;
       const analysis = analyzeValue(decl.value);
       const matches = findMatches(decl, analysis);
 
@@ -115,7 +120,7 @@ export function runCssFilter(ctx: StageContext): void {
         const support = feature.support[clientId];
 
         if (support.status === 'n') {
-          applyRemoval(ctx, sheet, decl, match, feature, removed);
+          if (applyRemoval(ctx, sheet, decl, match, feature, removed)) dropped.add(decl);
           handled = true;
           break; // first unsupported match wins; the declaration is gone.
         }
@@ -138,6 +143,10 @@ export function runCssFilter(ctx: StageContext): void {
         }
       }
     }
+    // Later stages only see what the client kept.
+    sheet.declarations = sheet.declarations.filter(
+      (d) => !dropped.has(d) && isAttached(sheet, d.decl),
+    );
   }
 }
 
@@ -148,7 +157,7 @@ function applyRemoval(
   match: Match,
   feature: NonNullable<ReturnType<typeof featureBySlug.get>>,
   removed: WeakSet<object>,
-): void {
+): boolean {
   const support = feature.support[ctx.clientId];
 
   // Value-level removal inside a shorthand (e.g. background-image token).
@@ -167,7 +176,7 @@ function applyRemoval(
       buildMutation(ctx.clientId, decl, match, feature, 'remove-value', 'error',
         removalReason(ctx, feature, support.notes, decl)),
     );
-    return;
+    return true;
   }
 
   // An unsupported family in a font-family list: drop just that family, the
@@ -179,6 +188,7 @@ function applyRemoval(
     if (kept.length > 0 && kept.length < families.length) {
       const dropped = families.filter((f) => !kept.includes(f));
       decl.decl.value = kept.join(', ');
+      decl.value = decl.decl.value;
       sheet.dirty = true;
       ctx.mutations.push(
         buildMutation(ctx.clientId, decl, match, feature, 'remove-value', 'error',
@@ -186,7 +196,7 @@ function applyRemoval(
             `removed from \`font-family\`, so the next family in the list is used.` +
             notes(support.notes)),
       );
-      return;
+      return false; // the declaration stays, with a shorter list
     }
   }
 
@@ -202,6 +212,7 @@ function applyRemoval(
     buildMutation(ctx.clientId, decl, match, feature, action, 'error',
       removalReason(ctx, feature, support.notes, decl)),
   );
+  return true;
 }
 
 function removalReason(

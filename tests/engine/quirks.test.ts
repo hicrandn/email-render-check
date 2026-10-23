@@ -23,31 +23,66 @@ describe('defaults: UA stylesheet injection', () => {
   });
 });
 
-describe('quirks: @media handling', () => {
+describe('css-filter: @media follows caniemail', () => {
   const html = `<html><head><style>
     .x { color: blue; }
     @media (max-width:600px){ .x { color: red; } }
   </style></head><body><p class="x">hi</p></body></html>`;
 
-  it('strips @media entirely for Outlook (Word engine)', () => {
+  it('removes @media entirely for Outlook (Windows)', () => {
     const { html: out, mutations } = simulate(html, 'outlook-win');
     expect(out).not.toContain('@media');
-    const q = byFeature(mutations, 'quirk-outlook-media');
+    const q = byFeature(mutations, 'css-at-media');
     expect(q).toHaveLength(1);
+    expect(q[0].action).toBe('remove-rule');
     expect(q[0].severity).toBe('error');
   });
 
   it('keeps @media but warns for Yahoo (partial support)', () => {
     const { html: out, mutations } = simulate(html, 'yahoo');
     expect(out).toContain('@media');
-    expect(byFeature(mutations, 'quirk-media-partial')).toHaveLength(1);
+    expect(byFeature(mutations, 'css-at-media')[0].action).toBe('warn-only');
   });
 
   it('keeps @media untouched for Apple Mail', () => {
     const { html: out, mutations } = simulate(html, 'apple-mail');
     expect(out).toContain('@media');
-    expect(byFeature(mutations, 'quirk-media-partial')).toHaveLength(0);
-    expect(byFeature(mutations, 'quirk-outlook-media')).toHaveLength(0);
+    expect(byFeature(mutations, 'css-at-media')).toHaveLength(0);
+  });
+
+  it('does not report declarations inside a removed @media block', () => {
+    const { mutations } = simulate(
+      '<style>@media (max-width:600px){ .x { display:flex; } }</style><p class="x">x</p>',
+      'outlook-win',
+    );
+    expect(byFeature(mutations, 'css-display-flex')).toHaveLength(0);
+  });
+});
+
+describe('css-filter: at-rules and media features', () => {
+  it('removes @media (hover) for gmail, keeps it for apple-mail', () => {
+    const html = '<style>@media (hover: hover){ a:hover { color:red; } }</style><a>x</a>';
+    expect(byFeature(simulate(html, 'gmail').mutations, 'css-at-media-hover')[0].action).toBe('remove-rule');
+    expect(simulate(html, 'apple-mail').html).toContain('@media (hover');
+  });
+
+  it('removes prefers-color-scheme blocks for gmail even in light mode', () => {
+    const html = '<style>@media (prefers-color-scheme: dark){ p { color:#fff; } }</style><p>x</p>';
+    const { html: out, mutations } = simulate(html, 'gmail');
+    expect(byFeature(mutations, 'css-at-media-prefers-color-scheme')).toHaveLength(1);
+    expect(out).not.toContain('prefers-color-scheme');
+  });
+
+  it('removes @font-face for gmail, keeps it for apple-mail', () => {
+    const html = '<style>@font-face{font-family:X;src:url(x.woff2)}</style><p>x</p>';
+    expect(simulate(html, 'gmail').html).not.toContain('@font-face');
+    expect(simulate(html, 'apple-mail').html).toContain('@font-face');
+  });
+
+  it('removes @keyframes for outlook-com', () => {
+    const html = '<style>@keyframes spin{to{transform:rotate(1turn)}}</style><p>x</p>';
+    const { mutations } = simulate(html, 'outlook-com');
+    expect(byFeature(mutations, 'css-at-keyframes')[0].action).toBe('remove-rule');
   });
 });
 

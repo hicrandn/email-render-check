@@ -8,7 +8,6 @@ export const gmail: ClientProfile = {
   uaStylesheet: 'body{font-family:Arial,Helvetica,sans-serif;}',
   quirks: {
     maxSizeKB: 102, // Gmail clips messages larger than ~102 KB.
-    partialMediaQueries: true,
   },
   darkMode: {
     strategy: 'auto-invert',

@@ -34,10 +34,13 @@ pnpm update-caniemail   # refresh src/lib/engine/data/caniemail.json
   `simulate(html, clientId, context)` in `engine.ts` runs:
   1. `parse/` — parse5 HTML and postcss CSS ASTs with source locations
   2. `stages/sanitize.ts` — drop or unwrap unsupported elements
-  3. `stages/css-filter.ts` — remove unsupported CSS per Can I Email
+  3. `stages/css-filter.ts` (+ `css-rules.ts` for at-rules) — remove
+     unsupported CSS per Can I Email
   4. `stages/defaults.ts` — inject the client's UA stylesheet
   5. `stages/dark-mode.ts` — color-scheme hint, dark-mode simulation
   6. `stages/quirks.ts` — Word engine quirks, Gmail 102 KB clipping
+- Support decisions come from the Can I Email snapshot (`supportFor` in
+  `data/snapshot.ts`); profiles only hold what Can I Email does not track.
 - `src/lib/engine/profiles/` — one file per client: quirks and dark-mode strategy.
 - `src/lib/engine/data/` — committed Can I Email snapshot plus `slug-map.ts`,
   which maps feature slugs to CSS properties, values, functions and units.

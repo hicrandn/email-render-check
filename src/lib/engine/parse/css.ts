@@ -9,7 +9,7 @@
 // owning AST node. No regex-based detection, no DOM.
 import safeParse from 'postcss-safe-parser';
 import valueParser from 'postcss-value-parser';
-import type { Declaration, Root } from 'postcss';
+import type { Declaration, Node as CssNode, Root } from 'postcss';
 import type { SourceLocation } from '../types';
 import type { Element, StyleSource } from './html';
 import { LineIndex } from './position';
@@ -203,6 +203,26 @@ export function parseStyleSheet(
   });
 
   return sheet;
+}
+
+/** Absolute location in the HTML of any node (rule, at-rule, declaration) in a sheet. */
+export function cssNodeLoc(
+  sheet: StyleSheet,
+  lineIndex: LineIndex,
+  node: CssNode,
+): SourceLocation | undefined {
+  const start = node.source?.start?.offset;
+  if (start === undefined) return undefined;
+  const end = node.source?.end?.offset;
+  const base = sheet.source.baseOffset;
+  return locFromOffsets(lineIndex, base + start, base + (end === undefined ? start : end + 1));
+}
+
+/** False once the node, or any ancestor, has been removed from the sheet. */
+export function isAttached(sheet: StyleSheet, node: CssNode): boolean {
+  let current: CssNode | Root = node;
+  while (current.parent) current = current.parent as CssNode | Root;
+  return current === sheet.root;
 }
 
 /**

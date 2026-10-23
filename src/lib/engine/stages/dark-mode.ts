@@ -9,13 +9,13 @@
 //     inversion of undeclared colors, and flag the contrast / image failures
 //     it causes.
 //
-// Whether a client honors @media (prefers-color-scheme) and the color-scheme
-// meta tag is read from caniemail, not assumed from the strategy.
+// Whether a client honors the color-scheme meta tag is read from caniemail, not
+// assumed from the strategy; unsupported @media (prefers-color-scheme) blocks
+// are removed earlier by the CSS filter.
 import valueParser from 'postcss-value-parser';
-import type { Node as CssNode } from 'postcss';
 import type { SourceLocation } from '../types';
 import type { StageContext } from './context';
-import type { ParsedDeclaration, RemoveToken, StyleSheet } from '../parse/css';
+import { cssNodeLoc, type ParsedDeclaration, type RemoveToken, type StyleSheet } from '../parse/css';
 import {
   walkElements,
   elementLoc,
@@ -74,16 +74,6 @@ function isUninvertible(value: string): boolean {
   if (v === 'transparent' || v === 'currentcolor' || v === 'inherit') return true;
   const c = parseColor(v);
   return !c || c.a === 0;
-}
-
-function nodeLoc(ctx: StageContext, sheet: StyleSheet, node: CssNode): SourceLocation | undefined {
-  const start = node.source?.start;
-  if (!start) return undefined;
-  const base = sheet.source.baseOffset;
-  const s = ctx.parsed.lineIndex.toLineCol(base + start.offset);
-  const end = node.source?.end;
-  const e = end ? ctx.parsed.lineIndex.toLineCol(base + end.offset + 1) : s;
-  return { startLine: s.line, startCol: s.col, endLine: e.line, endCol: e.col };
 }
 
 /** Replace one token inside a shorthand value (e.g. the color in `background`). */
@@ -167,7 +157,7 @@ function applyPrefersDark(ctx: StageContext, media: DarkMedia[], authorNote: str
         stage: 'dark-mode',
         action: 'apply-dark-override',
         target: {
-          loc: nodeLoc(ctx, sheet, decl),
+          loc: cssNodeLoc(sheet, ctx.parsed.lineIndex, decl),
           property: decl.prop.toLowerCase(),
           value: decl.value,
         },
@@ -315,30 +305,6 @@ function flagImageInversion(ctx: StageContext): void {
 }
 
 /**
- * The client rewrites `@media (prefers-color-scheme)` into a query that never
- * matches (Gmail: `@media ( _filtered_a )`), so the author's dark rules drop out.
- */
-function stripPrefersDark(ctx: StageContext, media: DarkMedia[], notes: string[]): void {
-  for (const { sheet, at } of media) {
-    ctx.mutations.push({
-      client: ctx.clientId,
-      stage: 'dark-mode',
-      action: 'strip-dark-css',
-      target: { loc: nodeLoc(ctx, sheet, at), selector: `@media ${at.params}` },
-      feature: PREFERS_DARK_SLUG,
-      severity: 'warning',
-      reason:
-        `${ctx.profile.name} does not support @media (prefers-color-scheme), so the ` +
-        `\`@media ${at.params}\` block never applies.` +
-        (notes.length ? ` Notes: ${notes.join(' ')}` : ''),
-      evidence: PREFERS_DARK_DOC,
-    });
-    at.remove();
-    sheet.dirty = true;
-  }
-}
-
-/**
  * Outlook.com marks the elements it recolors with data-ogsc / data-ogsb.
  * Marking <body> is enough for the usual `[data-ogsc] .x {}` rules to match.
  */
@@ -393,13 +359,9 @@ export function runDarkMode(ctx: StageContext): void {
   // default background goes dark regardless of what the author declared.
   hintColorScheme(ctx, 'dark');
 
-  const prefers = supportFor(PREFERS_DARK_SLUG, ctx.clientId);
-  const honorsPrefersDark = prefers.status !== 'n';
-  let media = collectPrefersDark(ctx);
-  if (media.length && !honorsPrefersDark) {
-    stripPrefersDark(ctx, media, prefers.notes);
-    media = [];
-  }
+  // Blocks the client does not support were already removed by the CSS filter.
+  const honorsPrefersDark = supportFor(PREFERS_DARK_SLUG, ctx.clientId).status !== 'n';
+  const media = collectPrefersDark(ctx);
   const ogsc = dm.supportsOgscHack && hasOgsc(ctx);
   if (ogsc) applyOgsc(ctx);
 

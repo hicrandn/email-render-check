@@ -1,14 +1,12 @@
 // Quirks stage: per-client rendering behaviors that go beyond feature support.
+// (@media support is feature support and is handled by the CSS filter.)
 //
-//   - Outlook (Word): ignores @media entirely and ignores max-width on non-table
-//     elements. Media queries are stripped so the preview matches Outlook.
+//   - Outlook (Word): ignores max-width on non-table elements, computes
+//     percentage widths differently, and drops margin on block elements.
 //   - Gmail: clips messages larger than ~102 KB and shows a "[Message clipped]"
 //     notice. Handled after serialization (it is a raw byte-level cut).
-//   - Yahoo / Outlook.com / Gmail: partial/unreliable @media support -> warn.
-import type { AtRule } from 'postcss';
-import type { Mutation, SourceLocation } from '../types';
+import type { Mutation } from '../types';
 import type { StageContext } from './context';
-import type { StyleSheet } from '../parse/css';
 
 const GMAIL_CLIP_DOC =
   'https://github.com/hteumeuleu/email-bugs/issues/41'; // documents Gmail's 102KB clipping
@@ -20,66 +18,9 @@ const BLOCK_TAGS = new Set([
 ]);
 const MARGIN_PROPS = new Set(['margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left']);
 
-function atRuleLoc(ctx: StageContext, sheet: StyleSheet, at: AtRule): SourceLocation | undefined {
-  const start = at.source?.start;
-  const end = at.source?.end;
-  if (!start) return undefined;
-  const base = sheet.source.baseOffset;
-  const s = ctx.parsed.lineIndex.toLineCol(base + start.offset);
-  const e = end
-    ? ctx.parsed.lineIndex.toLineCol(base + end.offset + 1)
-    : s;
-  return { startLine: s.line, startCol: s.col, endLine: e.line, endCol: e.col };
-}
-
 /** AST / stylesheet quirks. Runs before serialization. */
 export function runQuirks(ctx: StageContext): void {
   const q = ctx.profile.quirks;
-
-  // --- @media handling -------------------------------------------------------
-  if (q.ignoresMediaQueries || q.partialMediaQueries) {
-    for (const sheet of ctx.sheets) {
-      if (sheet.source.kind !== 'block') continue;
-      const mediaRules: AtRule[] = [];
-      sheet.root.walkAtRules('media', (at) => {
-        mediaRules.push(at);
-      });
-      for (const at of mediaRules) {
-        const loc = atRuleLoc(ctx, sheet, at);
-        if (q.ignoresMediaQueries) {
-          at.remove();
-          sheet.dirty = true;
-          ctx.mutations.push({
-            client: ctx.clientId,
-            stage: 'quirk',
-            action: 'remove-element',
-            target: { loc, selector: `@media ${at.params}` },
-            feature: 'quirk-outlook-media',
-            severity: 'error',
-            reason:
-              `${ctx.profile.name} uses the Word engine, which ignores @media rules ` +
-              `entirely. The \`@media ${at.params}\` block was dropped — responsive ` +
-              `styles never apply; design mobile-first with fluid, hybrid layouts instead.`,
-            evidence: 'https://www.caniemail.com/features/css-at-media/',
-          });
-        } else {
-          ctx.mutations.push({
-            client: ctx.clientId,
-            stage: 'quirk',
-            action: 'warn-only',
-            target: { loc, selector: `@media ${at.params}` },
-            feature: 'quirk-media-partial',
-            severity: 'warning',
-            reason:
-              `${ctx.profile.name} has partial/unreliable @media support. The ` +
-              `\`@media ${at.params}\` block was kept, but may be stripped or ignored ` +
-              `depending on the query.`,
-            evidence: 'https://www.caniemail.com/features/css-at-media/',
-          });
-        }
-      }
-    }
-  }
 
   // --- Outlook ignores max-width on non-table elements -----------------------
   if (q.ignoresMaxWidth) {

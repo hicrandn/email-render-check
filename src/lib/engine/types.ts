@@ -37,12 +37,12 @@ export type MutationAction =
   | 'remove-value'
   | 'unwrap-element'
   | 'remove-element'
+  | 'remove-rule'
   | 'remove-attribute'
   | 'rewrite'
   | 'inject-default'
   | 'auto-invert-color'
   | 'apply-dark-override'
-  | 'strip-dark-css'
   | 'warn-only';
 
 export type Severity = 'error' | 'warning' | 'info';
@@ -99,10 +99,6 @@ export interface SimulationResult {
 export interface ClientQuirks {
   /** Message is clipped past this size (Gmail = 102 KB). */
   maxSizeKB?: number;
-  /** Rendering engine ignores @media entirely (Outlook/Word). */
-  ignoresMediaQueries?: boolean;
-  /** Partial / unreliable @media support (warn, keep). */
-  partialMediaQueries?: boolean;
   /** max-width is ignored on non-table elements (Outlook/Word). */
   ignoresMaxWidth?: boolean;
   /** Percentage widths render unreliably; needs fixed-width + ghost tables (Word). */

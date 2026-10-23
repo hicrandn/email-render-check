@@ -72,7 +72,7 @@ describe('dark mode: gmail with an author prefers-color-scheme block', () => {
     const { mutations, html: out } = simulate(html, client, DARK);
     const stripped = byFeature(mutations, 'css-at-media-prefers-color-scheme');
     expect(stripped).toHaveLength(1);
-    expect(stripped[0].action).toBe('strip-dark-css');
+    expect(stripped[0].action).toBe('remove-rule');
     expect(byFeature(mutations, 'darkmode-author-override')).toHaveLength(0);
     expect(byFeature(mutations, 'darkmode-auto-invert').length).toBeGreaterThan(0);
     expect(out).not.toContain('#0b1a3a');
