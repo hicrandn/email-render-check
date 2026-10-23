@@ -28,7 +28,6 @@ export interface SourceLocation {
 export type MutationStage =
   | 'sanitize'
   | 'css-filter'
-  | 'inline'
   | 'defaults'
   | 'dark-mode'
   | 'quirk';
@@ -58,16 +57,12 @@ export type ColorScheme = 'light' | 'dark';
 export interface RenderContext {
   /** The OS/app appearance the recipient is viewing under. */
   colorScheme: ColorScheme;
-  /** Reserved for a later stage; default false. */
-  imagesBlocked: boolean;
   /** Viewport width in px (e.g. 600 desktop, 375 mobile). */
   viewportWidth: number;
 }
 
-/** Default context so 2-arg `simulate` calls (and Phase 2 tests) keep working. */
 export const DEFAULT_CONTEXT: RenderContext = {
   colorScheme: 'light',
-  imagesBlocked: false,
   viewportWidth: 600,
 };
 

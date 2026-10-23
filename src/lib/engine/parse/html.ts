@@ -87,7 +87,7 @@ export function prependChild(parent: ParentNode, node: ChildNode): void {
 }
 
 /** Convert a parse5 location to our SourceLocation shape. */
-export function toSourceLocation(loc: {
+function toSourceLocation(loc: {
   startLine: number;
   startCol: number;
   endLine: number;
@@ -103,12 +103,6 @@ export function toSourceLocation(loc: {
 
 export function elementLoc(el: Element): SourceLocation | undefined {
   const loc = el.sourceCodeLocation;
-  if (!loc) return undefined;
-  return toSourceLocation(loc);
-}
-
-export function attrLoc(el: Element, name: string): SourceLocation | undefined {
-  const loc = el.sourceCodeLocation?.attrs?.[name];
   if (!loc) return undefined;
   return toSourceLocation(loc);
 }

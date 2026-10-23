@@ -85,8 +85,8 @@ const UNIT_LEVEL: UnitMapping[] = [
 ];
 
 /**
- * Slugs that are NOT declaration-level and are handled elsewhere (or out of
- * scope for this phase). Matched by exact slug or by prefix.
+ * Slugs that are not declaration-level: handled elsewhere or not modeled.
+ * Matched by exact slug or by prefix.
  */
 const SKIP_PREFIXES = [
   'css-selector-',

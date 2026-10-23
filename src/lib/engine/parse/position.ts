@@ -25,17 +25,3 @@ export class LineIndex {
     return { line: lo + 1, col: offset - this.lineStart[lo] + 1 };
   }
 }
-
-/**
- * Combine a base position (where a CSS fragment starts in the HTML) with a
- * position that postcss reported *relative to that fragment*.
- */
-export function combinePosition(
-  base: { line: number; col: number },
-  rel: { line: number; column: number },
-): { line: number; col: number } {
-  if (rel.line === 1) {
-    return { line: base.line, col: base.col + rel.column - 1 };
-  }
-  return { line: base.line + rel.line - 1, col: rel.column };
-}

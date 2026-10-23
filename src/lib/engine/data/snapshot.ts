@@ -12,7 +12,3 @@ export const featureBySlug: Map<string, FeatureSnapshot> = new Map(
 export const cssSlugs: string[] = snapshot.features
   .filter((f) => f.category === 'css')
   .map((f) => f.slug);
-
-export const htmlFeatures: FeatureSnapshot[] = snapshot.features.filter(
-  (f) => f.category === 'html',
-);

@@ -16,7 +16,6 @@ import { getProfile } from './profiles';
 import type { StageContext } from './stages/context';
 import { runSanitize } from './stages/sanitize';
 import { runCssFilter } from './stages/css-filter';
-import { runInline } from './stages/inline';
 import { runDefaults } from './stages/defaults';
 import { runDarkMode } from './stages/dark-mode';
 import { runQuirks, applyOutputQuirks } from './stages/quirks';
@@ -24,10 +23,9 @@ import { runQuirks, applyOutputQuirks } from './stages/quirks';
 const STAGE_ORDER: Record<MutationStage, number> = {
   sanitize: 0,
   'css-filter': 1,
-  inline: 2,
-  defaults: 3,
-  'dark-mode': 4,
-  quirk: 5,
+  defaults: 2,
+  'dark-mode': 3,
+  quirk: 4,
 };
 
 /** Stable ordering so identical input always yields a byte-identical result. */
@@ -96,10 +94,9 @@ export function simulate(
   ctx.sheets = sources.map((s) => parseStyleSheet(s, parsed.lineIndex));
   runCssFilter(ctx);
 
-  // 3. Phase-3 stages.
-  runInline(ctx); // stub
+  // 3. client rendering behavior.
   runDefaults(ctx); // inject the client's UA stylesheet
-  runDarkMode(ctx); // dark-mode simulation (no-op unless context is dark)
+  runDarkMode(ctx); // color-scheme hint, plus dark-mode simulation when dark
   runQuirks(ctx); // @media / max-width quirks (AST-level)
 
   // Derive the output HTML from the mutated AST, then apply output-level quirks

@@ -154,11 +154,10 @@ const DEVICE_VIEWPORT: Record<Device, number> = { desktop: 600, mobile: 375 };
 
 // Issues are grouped by pipeline stage so dark-mode findings read distinctly
 // from feature-strip / sanitize ones.
-const STAGE_ORDER: MutationStage[] = ['sanitize', 'css-filter', 'inline', 'defaults', 'dark-mode', 'quirk'];
+const STAGE_ORDER: MutationStage[] = ['sanitize', 'css-filter', 'defaults', 'dark-mode', 'quirk'];
 const STAGE_LABELS: Record<MutationStage, string> = {
   sanitize: 'Sanitized',
   'css-filter': 'Unsupported CSS',
-  inline: 'Inlined',
   defaults: 'Client defaults',
   'dark-mode': 'Dark mode',
   quirk: 'Rendering quirks',
@@ -307,7 +306,7 @@ export default function Studio() {
   // The conditions being simulated. The engine (not a CSS hack) produces the
   // dark output per client, so previewScheme/device feed straight into it.
   const renderCtx = useMemo<RenderContext>(
-    () => ({ colorScheme: previewScheme, imagesBlocked: false, viewportWidth: DEVICE_VIEWPORT[device] }),
+    () => ({ colorScheme: previewScheme, viewportWidth: DEVICE_VIEWPORT[device] }),
     [previewScheme, device],
   );
 

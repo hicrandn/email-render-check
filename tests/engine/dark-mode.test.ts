@@ -3,7 +3,7 @@ import { simulate } from '@/src/lib/engine/engine';
 import { DEFAULT_CONTEXT, type Mutation, type RenderContext } from '@/src/lib/engine/types';
 import { parseColor, rgbToHsl, flipLightness } from '@/src/lib/engine/color';
 
-const DARK: RenderContext = { colorScheme: 'dark', imagesBlocked: false, viewportWidth: 375 };
+const DARK: RenderContext = { colorScheme: 'dark', viewportWidth: 375 };
 const byFeature = (m: Mutation[], f: string) => m.filter((x) => x.feature === f);
 
 describe('color: HSL lightness-flip inversion', () => {
@@ -145,7 +145,7 @@ describe('dark mode: determinism', () => {
   });
 });
 
-describe('quirks: Outlook percentage width + block margin (Phase 3)', () => {
+describe('quirks: Outlook percentage width + block margin', () => {
   it('warns on percentage width for outlook-win', () => {
     const { mutations } = simulate('<table style="width:100%"><tr><td>x</td></tr></table>', 'outlook-win');
     expect(byFeature(mutations, 'quirk-outlook-width')).toHaveLength(1);
