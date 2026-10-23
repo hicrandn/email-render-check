@@ -139,6 +139,23 @@ describe('dark mode: contrast regression', () => {
     expect(contrast[0].severity).toBe('error');
   });
 
+  it('measures text against an ancestor background, not a default white', () => {
+    // Gmail flips the card to near-black and the dark text to light: readable.
+    const html =
+      '<table><tr><td style="background-color:#ffffff">' +
+      '<p style="color:#1c2a1f">Order confirmed</p></td></tr></table>';
+    const { mutations } = simulate(html, 'gmail', DARK);
+    expect(byFeature(mutations, 'darkmode-contrast')).toHaveLength(0);
+  });
+
+  it('ignores hidden text such as a preheader', () => {
+    const html =
+      '<div style="background-color:#ffffff">' +
+      '<div style="display:none">Preheader</div><p style="color:#111111">Body</p></div>';
+    const { mutations } = simulate(html, 'gmail', DARK);
+    expect(byFeature(mutations, 'darkmode-contrast')).toHaveLength(0);
+  });
+
   it('does not flag contrast for an empty (text-free) element', () => {
     const html = '<div style="background-color:#ffffff"><img src="x.png"></div>';
     const { mutations } = simulate(html, 'gmail', DARK);

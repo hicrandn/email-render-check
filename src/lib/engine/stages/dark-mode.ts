@@ -51,11 +51,12 @@ const DEFAULT_TEXT = '#000000';
 const DEFAULT_BG = '#ffffff';
 
 /**
- * True if the element directly or transitively contains non-whitespace text.
+ * True if the element directly or transitively contains non-whitespace text,
+ * not counting subtrees for which `skip` returns true.
  * Iterative (explicit stack) — deeply nested markup can otherwise blow the
  * call stack, same reasoning as `walkElements` in parse/html.ts.
  */
-function hasTextContent(node: Node): boolean {
+function hasTextContent(node: Node, skip: (child: Node) => boolean = () => false): boolean {
   const stack: Node[] = [node];
   while (stack.length > 0) {
     const current = stack.pop()!;
@@ -63,7 +64,7 @@ function hasTextContent(node: Node): boolean {
     if (!children) continue;
     for (const child of children) {
       if (isTextNode(child) && child.value.trim().length > 0) return true;
-      stack.push(child);
+      if (!skip(child)) stack.push(child);
     }
   }
   return false;
@@ -230,7 +231,7 @@ function autoInvert(ctx: StageContext, honorsPrefersDark: boolean): void {
   }
 
   if (inverted === 0) return;
-  flagContrastRegressions(ctx, pairs);
+  flagContrastRegressions(ctx, pairs, hiddenElements(ctx));
   flagImageInversion(ctx);
 }
 
@@ -243,16 +244,52 @@ function applyInverted(d: ParsedDeclaration, after: string): void {
   }
 }
 
-function flagContrastRegressions(ctx: StageContext, pairs: Map<Element, Pair>): void {
-  for (const [el, p] of pairs) {
-    if (!hasTextContent(el)) continue; // no text → no readability concern
+/** The element itself or its nearest ancestor with a declared inline background. */
+function backgroundOf(el: Element, pairs: Map<Element, Pair>): Pair | undefined {
+  for (let n: Node | null = el; n; n = (n as { parentNode?: Node | null }).parentNode ?? null) {
+    const p = pairs.get(n as Element);
+    if (p?.bgBefore) return p;
+  }
+  return undefined;
+}
 
-    // An undeclared member keeps its browser default and is NOT inverted; a
-    // declared member uses its before/after values.
+/** Elements hidden inline (`display:none`, e.g. a preheader) or by `hidden`. */
+function hiddenElements(ctx: StageContext): Set<Node> {
+  const hidden = new Set<Node>();
+  for (const sheet of ctx.sheets) {
+    for (const d of sheet.declarations) {
+      if (d.origin === 'inline' && d.prop === 'display' && d.value.trim().toLowerCase() === 'none') {
+        hidden.add(d.element);
+      }
+    }
+  }
+  walkElements(ctx.parsed.document, (el) => {
+    if (getAttr(el, 'hidden')) hidden.add(el);
+  });
+  return hidden;
+}
+
+function flagContrastRegressions(
+  ctx: StageContext,
+  pairs: Map<Element, Pair>,
+  hidden: Set<Node>,
+): void {
+  for (const [el, p] of pairs) {
+    // No visible text → no readability concern. Without a declared color,
+    // only text that no descendant recolors is in this element's own color.
+    if (hidden.has(el)) continue;
+    const skip = (n: Node) =>
+      hidden.has(n) || (!p.colorBefore && pairs.get(n as Element)?.colorBefore !== undefined);
+    if (!hasTextContent(el, skip)) continue;
+
+    // The text sits on the nearest declared background, its own or an
+    // ancestor's. An undeclared member keeps its browser default and is NOT
+    // inverted; a declared member uses its before/after values.
+    const bg = backgroundOf(el, pairs);
     const textBefore = parseColor(p.colorBefore ?? DEFAULT_TEXT);
     const textAfter = parseColor(p.colorAfter ?? p.colorBefore ?? DEFAULT_TEXT);
-    const bgBefore = parseColor(p.bgBefore ?? DEFAULT_BG);
-    const bgAfter = parseColor(p.bgAfter ?? p.bgBefore ?? DEFAULT_BG);
+    const bgBefore = parseColor(bg?.bgBefore ?? DEFAULT_BG);
+    const bgAfter = parseColor(bg?.bgAfter ?? bg?.bgBefore ?? DEFAULT_BG);
     if (!textBefore || !textAfter || !bgBefore || !bgAfter) continue;
 
     const before = contrastRatio(textBefore, bgBefore);
