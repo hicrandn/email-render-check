@@ -147,3 +147,22 @@ describe('determinism', () => {
     }
   });
 });
+
+describe('sanitize: <input> and <button> types', () => {
+  it('checks <input type="submit"> against its own entry (outlook-com: n)', () => {
+    const { html: out, mutations } = simulate('<input type="submit" value="Go">', 'outlook-com');
+    expect(byFeature(mutations, 'html-input-submit')[0].action).toBe('remove-element');
+    expect(out).not.toContain('<input');
+  });
+
+  it('keeps <input type="text"> in outlook-com', () => {
+    const { html: out } = simulate('<input type="text">', 'outlook-com');
+    expect(out).toContain('<input');
+  });
+
+  it('checks <button type="reset"> against html-button-reset (yahoo: n)', () => {
+    const { mutations } = simulate('<button type="reset">Clear</button>', 'yahoo');
+    expect(byFeature(mutations, 'html-button-reset')).toHaveLength(1);
+    expect(byFeature(mutations, 'html-button-submit')).toHaveLength(0);
+  });
+});

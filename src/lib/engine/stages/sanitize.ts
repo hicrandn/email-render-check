@@ -10,6 +10,7 @@ import { featureBySlug } from '../data/snapshot';
 import {
   walkElements,
   elementLoc,
+  getAttr,
   type Element,
   type ParentNode,
   type ChildNode,
@@ -25,7 +26,6 @@ const ELEMENT_SLUG: Record<string, string> = {
   base: 'html-base',
   bdi: 'html-bdi',
   blockquote: 'html-blockquote',
-  button: 'html-button-submit',
   code: 'html-code',
   del: 'html-del',
   dfn: 'html-dfn',
@@ -36,7 +36,6 @@ const ELEMENT_SLUG: Record<string, string> = {
   h4: 'html-h1-h6', h5: 'html-h1-h6', h6: 'html-h1-h6',
   hr: 'html-hr',
   img: 'html-img',
-  input: 'html-input-text',
   link: 'html-link',
   marquee: 'html-marquee',
   meter: 'html-meter',
@@ -59,6 +58,23 @@ const ELEMENT_SLUG: Record<string, string> = {
   video: 'html-video',
   wbr: 'html-wbr',
 };
+
+/** <input> has one caniemail entry per type; other types fall back to text. */
+const INPUT_TYPE_SLUG: Record<string, string> = {
+  checkbox: 'html-input-checkbox',
+  hidden: 'html-input-hidden',
+  radio: 'html-input-radio',
+  reset: 'html-input-reset',
+  submit: 'html-input-submit',
+};
+
+function slugFor(el: Element): string | undefined {
+  const type = getAttr(el, 'type')?.value.trim().toLowerCase() ?? '';
+  if (el.tagName === 'input') return INPUT_TYPE_SLUG[type] ?? 'html-input-text';
+  // A <button> submits unless its type says otherwise.
+  if (el.tagName === 'button') return type === 'reset' ? 'html-button-reset' : 'html-button-submit';
+  return ELEMENT_SLUG[el.tagName];
+}
 
 /**
  * Always removed entirely, for every client — active content caniemail has no
@@ -136,7 +152,7 @@ export function runSanitize(ctx: StageContext): void {
     }
 
     // 2. caniemail-driven element support.
-    const slug = ELEMENT_SLUG[tag];
+    const slug = slugFor(el);
     if (!slug) return;
     const feature = featureBySlug.get(slug);
     if (!feature) return;
