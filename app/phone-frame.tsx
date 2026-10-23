@@ -11,7 +11,13 @@ const FRAME = { width: PHONE_SCREEN.width + 2 * BEZEL, height: PHONE_SCREEN.heig
 
 // Shrunk to fit the preview pane, but not below this; past it the pane scrolls
 // rather than making the email unreadable.
-const MIN_SCALE = 0.75;
+export const MIN_SCALE = 0.75;
+
+/** Scale at which the whole phone fits a box, between MIN_SCALE and 1. */
+export function fitScale(boxWidth: number, boxHeight: number): number {
+  const s = Math.min(1, boxHeight / FRAME.height, boxWidth / FRAME.width);
+  return Math.max(MIN_SCALE, s);
+}
 
 function StatusIcons() {
   return (
@@ -56,10 +62,7 @@ export default function PhoneFrame({
   useEffect(() => {
     const box = boxRef.current;
     if (!box) return;
-    const fit = () => {
-      const s = Math.min(1, box.clientHeight / FRAME.height, box.clientWidth / FRAME.width);
-      setScale(Math.max(MIN_SCALE, s));
-    };
+    const fit = () => setScale(fitScale(box.clientWidth, box.clientHeight));
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(box);

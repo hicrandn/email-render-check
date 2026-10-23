@@ -172,3 +172,55 @@ describe('quirks: fixed widths wider than a phone', () => {
     expect(fit('<table width="600"><tr><td>x</td></tr></table>', 'gmail')).toHaveLength(0);
   });
 });
+
+describe('quirks: phone width, media query parsing', () => {
+  const PHONE = { colorScheme: 'light' as const, viewportWidth: 393 };
+  const flagged = (media: string) =>
+    byFeature(
+      simulate(
+        `<style>@media ${media} { .c { width:100% !important; } }</style>
+         <table class="c" width="600"><tr><td>x</td></tr></table>`,
+        'apple-mail-ios',
+        PHONE,
+      ).mutations,
+      'quirk-mobile-fixed-width',
+    ).length > 0;
+
+  it('reads em units (37.5em = 600px)', () => {
+    expect(flagged('(max-width: 37.5em)')).toBe(false);
+  });
+
+  it('applies a comma list when any query matches', () => {
+    expect(flagged('print, (max-width: 600px)')).toBe(false);
+  });
+
+  it('ignores print-only rules', () => {
+    expect(flagged('print')).toBe(true);
+  });
+
+  it('treats max-device-width like max-width', () => {
+    expect(flagged('(max-device-width: 480px)')).toBe(false);
+    expect(flagged('(max-device-width: 320px)')).toBe(true);
+  });
+
+  it('matches an id selector', () => {
+    const html = `<style>@media (max-width:600px){ #w { width:100% !important; } }</style>
+      <table id="w" width="600"><tr><td>x</td></tr></table>`;
+    expect(byFeature(simulate(html, 'apple-mail-ios', PHONE).mutations, 'quirk-mobile-fixed-width')).toHaveLength(0);
+  });
+
+  it('still flags a fixed cell inside a table that was resized', () => {
+    const html = `<style>@media (max-width:600px){ .c { width:100% !important; } }</style>
+      <table class="c" width="600"><tr><td width="560">x</td></tr></table>`;
+    const m = byFeature(simulate(html, 'apple-mail-ios', PHONE).mutations, 'quirk-mobile-fixed-width');
+    expect(m).toHaveLength(1);
+    expect(m[0].target.element).toBe('td');
+  });
+
+  it('keeps resizing when only part of the rule\'s selector list is dropped', () => {
+    // The Outlook app drops `.c:hover` (no :hover on iOS) but keeps `.c`.
+    const html = `<style>@media (max-width:600px){ .c:hover, .c { width:100% !important; } }</style>
+      <table class="c" width="600"><tr><td>x</td></tr></table>`;
+    expect(byFeature(simulate(html, 'outlook-mobile', PHONE).mutations, 'quirk-mobile-fixed-width')).toHaveLength(0);
+  });
+});

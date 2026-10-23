@@ -22,7 +22,7 @@ import {
 import type { StageContext } from './context';
 
 /** tag name -> caniemail html slug (used for support lookup + evidence). */
-const ELEMENT_SLUG: Record<string, string> = {
+export const ELEMENT_SLUG: Record<string, string> = {
   abbr: 'html-abbr',
   acronym: 'html-acronym',
   address: 'html-address',
@@ -79,7 +79,7 @@ for (const tag of [
 }
 
 /** <input> has one caniemail entry per type; other types fall back to text. */
-const INPUT_TYPE_SLUG: Record<string, string> = {
+export const INPUT_TYPE_SLUG: Record<string, string> = {
   checkbox: 'html-input-checkbox',
   hidden: 'html-input-hidden',
   radio: 'html-input-radio',
@@ -108,7 +108,7 @@ const REMOVE_WHEN_UNSUPPORTED = new Set([
 ]);
 
 /** Attributes with their own caniemail entry. */
-const ATTRIBUTE_SLUG: Record<string, string> = {
+export const ATTRIBUTE_SLUG: Record<string, string> = {
   align: 'html-align',
   'aria-describedby': 'html-aria-describedby',
   'aria-hidden': 'html-aria-hidden',
@@ -139,7 +139,7 @@ const ATTRIBUTE_SLUG: Record<string, string> = {
 };
 
 /** Image formats caniemail tracks, by file extension and by data: URI MIME type. */
-const IMAGE_EXTENSION_SLUG: Record<string, string> = {
+export const IMAGE_EXTENSION_SLUG: Record<string, string> = {
   apng: 'image-apng',
   avif: 'image-avif',
   bmp: 'image-bmp',
@@ -157,7 +157,7 @@ const IMAGE_EXTENSION_SLUG: Record<string, string> = {
   tiff: 'image-tiff',
   webp: 'image-webp',
 };
-const IMAGE_MIME_SLUG: Record<string, string> = {
+export const IMAGE_MIME_SLUG: Record<string, string> = {
   'image/apng': 'image-apng',
   'image/avif': 'image-avif',
   'image/bmp': 'image-bmp',

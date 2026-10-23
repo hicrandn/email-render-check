@@ -1,6 +1,6 @@
 // Rule half of the CSS filter: checks at-rules (@media and its media features,
-// @font-face, @import, @keyframes, @supports), selectors and CSS nesting
-// against caniemail.
+// @font-face, @import, @keyframes, @supports), selectors, CSS nesting and CSS
+// comments against caniemail.
 //
 //   n (unsupported) -> remove-rule; an at-rule goes with everything inside it,
 //                      a selector is dropped from its rule's selector list
@@ -11,13 +11,13 @@
 // are not checked or reported.
 import valueParser from 'postcss-value-parser';
 import selectorParser from 'postcss-selector-parser';
-import type { AtRule, Rule } from 'postcss';
+import type { AtRule, Comment, Rule } from 'postcss';
 import type { Mutation } from '../types';
 import { featureBySlug } from '../data/snapshot';
 import { cssNodeLoc, isAttached, type StyleSheet } from '../parse/css';
 import type { StageContext } from './context';
 
-const AT_RULE_SLUG: Record<string, string> = {
+export const AT_RULE_SLUG: Record<string, string> = {
   media: 'css-at-media',
   'font-face': 'css-at-font-face',
   import: 'css-at-import',
@@ -125,6 +125,7 @@ function insideKeyframes(rule: Rule): boolean {
 
 export function runCssRuleFilter(ctx: StageContext): void {
   for (const sheet of ctx.sheets) {
+    checkComments(ctx, sheet);
     if (sheet.source.kind !== 'block') continue;
     const atRules: AtRule[] = [];
     sheet.root.walkAtRules((at) => {
@@ -147,6 +148,39 @@ export function runCssRuleFilter(ctx: StageContext): void {
         continue;
       }
       checkSelectors(ctx, sheet, rule);
+    }
+  }
+}
+
+/** CSS comments, in <style> blocks and style attributes alike. */
+function checkComments(ctx: StageContext, sheet: StyleSheet): void {
+  const feature = featureBySlug.get('css-comments');
+  if (!feature) return;
+  const support = feature.support[ctx.clientId];
+  if (support.status !== 'n' && support.status !== 'a') return;
+  const comments: Comment[] = [];
+  sheet.root.walkComments((c) => {
+    comments.push(c);
+  });
+  for (const comment of comments) {
+    const removed = support.status === 'n';
+    ctx.mutations.push({
+      client: ctx.clientId,
+      stage: 'css-filter',
+      action: removed ? 'rewrite' : 'warn-only',
+      target: { loc: cssNodeLoc(sheet, ctx.parsed.lineIndex, comment), selector: '/* … */' },
+      feature: 'css-comments',
+      severity: removed ? 'error' : 'warning',
+      reason:
+        (removed
+          ? `${ctx.profile.name} does not support CSS comments; the comment was removed.`
+          : `${ctx.profile.name} has partial support for CSS comments. The comment was kept.`) +
+        notes(support.notes),
+      evidence: feature.url,
+    });
+    if (removed) {
+      comment.remove();
+      sheet.dirty = true;
     }
   }
 }
