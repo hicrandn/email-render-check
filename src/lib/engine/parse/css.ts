@@ -1,6 +1,6 @@
 // CSS parsing for both <style> blocks and style="" attributes.
 // - postcss-safe-parser tolerates the malformed CSS real emails ship with.
-// - Every declaration gets an ABSOLUTE SourceLocation in the original HTML.
+// - Every declaration gets an absolute SourceLocation in the original HTML.
 // - Shorthands (border/background/font/margin/padding) are expanded so that,
 //   e.g., `background-image` can be derived from `background: url(x) no-repeat`.
 //
@@ -17,7 +17,7 @@ import { LineIndex } from './position';
 export interface RemoveToken {
   /** The shorthand declaration whose value contains the token. */
   parentDecl: Declaration;
-  /** Index of the token within the shorthand VALUE string. */
+  /** Index of the token within the shorthand's value string. */
   sourceIndex: number;
   /** The token text, used to locate and drop it during rewrite. */
   text: string;

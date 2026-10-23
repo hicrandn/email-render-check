@@ -172,8 +172,8 @@ export function runQuirks(ctx: StageContext): void {
 
 /**
  * Output-level quirks that operate on the final serialized HTML.
- * Gmail clips the raw message at ~102 KB (often mid-element) and appends a
- * "[Message clipped]" notice — reproduced here byte-for-byte.
+ * Gmail clips messages past ~102 KB (often mid-element) and shows a
+ * "[Message clipped]" link; approximated by cutting the serialized output.
  */
 export function applyOutputQuirks(ctx: StageContext, html: string): string {
   const maxKB = ctx.profile.quirks.maxSizeKB;

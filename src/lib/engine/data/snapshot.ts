@@ -1,5 +1,5 @@
 // Typed accessor for the committed caniemail snapshot. The JSON is imported at
-// build time — the engine NEVER fetches caniemail.com at runtime.
+// build time — the engine never fetches caniemail.com at runtime.
 import raw from './caniemail.json';
 import type { CanIEmailSnapshot, FeatureSnapshot } from '../types';
 

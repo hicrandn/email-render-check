@@ -1,11 +1,12 @@
-// Dark-mode stage. Runs after `defaults`, before `quirks`. No-op unless the
-// render context is dark. Branches on the client's DarkModeProfile:
+// Dark-mode stage. Runs after `defaults`, before `quirks`. Always declares the
+// rendered color scheme; under a dark context it branches on the client's
+// DarkModeProfile:
 //
 //   unsupported (Outlook/Win): render light; emit one info.
 //   native / partial (Apple Mail, Outlook.com): apply the author's
 //     prefers-color-scheme dark rules if present; otherwise keep light.
 //   auto-invert (Gmail, Yahoo): use the author's dark styles if present,
-//     otherwise SIMULATE the client's automatic HSL lightness inversion of
+//     otherwise simulate the client's automatic HSL lightness inversion of
 //     undeclared colors, and flag the contrast / image failures it causes.
 import valueParser from 'postcss-value-parser';
 import type { Declaration } from 'postcss';
@@ -123,14 +124,9 @@ function hasOgsc(ctx: StageContext): boolean {
 }
 
 /**
- * Hint the document's own default background via CSS `color-scheme`. This is
- * what makes a browser/WebKit-based client's UA-default background (and
- * scrollbars/form controls) render light or dark wherever the author hasn't
- * declared their own background — not an author-visible mutation, just an
- * explicit declaration of the scheme the simulated client actually renders
- * under. Called for EVERY render (light included) so nothing is left to the
- * host browser's own default; the engine owns the whole rendering, not just
- * the dark half of it.
+ * Declare the scheme the simulated client renders under via CSS `color-scheme`,
+ * so undeclared backgrounds and form controls follow it instead of the host
+ * browser's own preference. Runs for light renders too. Not logged as a mutation.
  */
 function hintColorScheme(ctx: StageContext, scheme: 'light' | 'dark'): void {
   const doc = ctx.parsed.document;
@@ -212,8 +208,7 @@ function autoInvert(ctx: StageContext): void {
         severity: 'warning',
         reason:
           `${ctx.profile.name} auto-inverts undeclared colors in dark mode: ` +
-          `\`${d.prop}: ${d.value}\` was rendered as \`${after}\` (lightness flipped, hue kept). ` +
-          `You did not control this — the client decided it.`,
+          `\`${d.prop}: ${d.value}\` was rendered as \`${after}\` (lightness flipped, hue kept).`,
         evidence: PREFERS_DARK_DOC,
         fix:
           'Add an @media (prefers-color-scheme: dark) block' +
@@ -316,15 +311,12 @@ function flagImageInversion(ctx: StageContext): void {
 export function runDarkMode(ctx: StageContext): void {
   const dm = ctx.profile.darkMode;
 
-  // Light is not "do nothing" — it is the engine explicitly declaring the
-  // client renders light, same as the dark branches below declare dark.
   if (ctx.render.colorScheme === 'light') {
     hintColorScheme(ctx, 'light');
     return;
   }
 
   if (dm.strategy === 'unsupported') {
-    // Renders light even under a dark OS setting — declare that explicitly too.
     hintColorScheme(ctx, 'light');
     ctx.mutations.push({
       client: ctx.clientId,
@@ -391,7 +383,7 @@ export function runDarkMode(ctx: StageContext): void {
       ctx,
       media,
       `${ctx.profile.name} used your @media (prefers-color-scheme: dark) styles instead of ` +
-        `auto-inverting — exactly what you want.`,
+        `auto-inverting.`,
     );
     return;
   }

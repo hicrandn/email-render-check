@@ -3,10 +3,10 @@
  * clients, and writes a normalized, committed snapshot to
  * `src/lib/engine/data/caniemail.json`.
  *
- * The snapshot is committed to the repo and read at build/runtime; the app NEVER
+ * The snapshot is committed to the repo and read at build/runtime; the app never
  * fetches caniemail.com at runtime.
  *
- * Run with: `npm run update-caniemail` (or `bun run update-caniemail`).
+ * Run with: `pnpm update-caniemail`.
  */
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
