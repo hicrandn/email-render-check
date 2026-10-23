@@ -1,12 +1,7 @@
 @import "tailwindcss";
 
-/* Drive the `dark:` variant from a manual [data-theme] attribute (set by the
-   theme toggle + a pre-paint script in layout.tsx) instead of the OS media
-   query, so light/system/dark can be switched in-app. */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
-
-/* Single source of truth for the studio surfaces. Semantic accent colours
-   (red/amber/sky for severities) stay on Tailwind's palette. */
+/* Studio surfaces. Severity accents (red/amber/sky) stay on Tailwind's palette.
+   The studio is light-only; the email preview has its own light/dark toggle. */
 :root {
   --canvas: #f4f4f5;
   --panel: #ffffff;
@@ -19,24 +14,7 @@
   --preview-frame-ring: rgb(0 0 0 / 0.05);
   --tab-active-bg: #18181b;
   --tab-active-fg: #ffffff;
-  --tab-badge-active-bg: rgb(255 255 255 / 0.25);
   --surface-tint: rgb(0 0 0 / 0.05);
-}
-
-[data-theme="dark"] {
-  --canvas: #07070b;
-  --panel: #0f0f17;
-  --panel-2: #0c0c13;
-  --preview-bg: #050508;
-  --border: #1e1e2b;
-  --border-soft: #17171f;
-  --fg: #e6e6ea;
-  --fg-muted: #7c7c8a;
-  --preview-frame-ring: rgb(255 255 255 / 0.1);
-  --tab-active-bg: #ffffff;
-  --tab-active-fg: #18181b;
-  --tab-badge-active-bg: rgb(24 24 27 / 0.15);
-  --surface-tint: rgb(255 255 255 / 0.1);
 }
 
 @theme inline {

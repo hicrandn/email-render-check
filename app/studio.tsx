@@ -82,17 +82,17 @@ const SAMPLE = `<!doctype html>
 const SEVERITY: Record<Mutation['severity'], { dot: string; badge: string; label: string }> = {
   error: {
     dot: 'bg-red-500',
-    badge: 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-950/50 dark:text-red-300 dark:ring-red-400/20',
+    badge: 'bg-red-50 text-red-700 ring-red-600/20',
     label: 'Error',
   },
   warning: {
     dot: 'bg-amber-500',
-    badge: 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-400/20',
+    badge: 'bg-amber-50 text-amber-700 ring-amber-600/20',
     label: 'Warning',
   },
   info: {
     dot: 'bg-sky-500',
-    badge: 'bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-400/20',
+    badge: 'bg-sky-50 text-sky-700 ring-sky-600/20',
     label: 'Info',
   },
 };
@@ -221,7 +221,7 @@ function IssueRow({ items, onSelect }: { items: Mutation[]; onSelect: (m: Mutati
         <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset ${sev.badge}`}>
           {sev.label}
         </span>
-        <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-(--fg-muted) dark:bg-white/10">
+        <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-(--fg-muted)">
           {head.action}
         </code>
         {property && (
@@ -272,7 +272,7 @@ function IssueRow({ items, onSelect }: { items: Mutation[]; onSelect: (m: Mutati
         href={head.evidence}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-1 inline-block text-[11px] font-medium text-sky-600 hover:underline dark:text-sky-400"
+        className="mt-1 inline-block text-[11px] font-medium text-sky-600 hover:underline"
       >
         {head.feature} ↗
       </a>
@@ -427,7 +427,7 @@ export default function Studio() {
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-(--canvas) text-(--fg)">
       {/* Top bar */}
       <header className="flex shrink-0 items-center gap-3 border-b border-(--border) bg-(--panel) px-4 py-2.5">
-        <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">
+        <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-white">
           <HugeiconsIcon icon={Mail01Icon} size={14} strokeWidth={2} />
         </div>
         <h1 className="text-sm font-semibold tracking-tight">Mail Check</h1>
@@ -458,7 +458,7 @@ export default function Studio() {
         {/* ---- Editor pane ---- */}
         <section className="flex w-[46%] min-w-0 min-h-0 flex-col border-r border-(--border) bg-(--panel)">
           <div className="min-h-0 flex-1 overflow-hidden">
-            <Editor value={source} onChange={setSource} onView={(v) => (viewRef.current = v)} theme="light" />
+            <Editor value={source} onChange={setSource} onView={(v) => (viewRef.current = v)} />
           </div>
         </section>
 
@@ -491,7 +491,7 @@ export default function Studio() {
                   className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     isActive
                       ? 'bg-(--tab-active-bg) text-(--tab-active-fg)'
-                      : 'text-(--fg-muted) hover:bg-black/5 dark:hover:bg-white/5'
+                      : 'text-(--fg-muted) hover:bg-black/5'
                   }`}
                 >
                   {shortName(id)}
@@ -522,7 +522,7 @@ export default function Studio() {
             </div>
 
             {alwaysLight && (
-              <span className="shrink-0 rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-medium text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-300">
+              <span className="shrink-0 rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-medium text-amber-600 ring-1 ring-amber-500/30">
                 {shortName(active)} always light
               </span>
             )}
@@ -589,7 +589,7 @@ export default function Studio() {
             onPointerMove={onDividerMove}
             onPointerUp={onDividerUp}
             onKeyDown={onDividerKeyDown}
-            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-(--border) bg-(--panel-2) hover:bg-black/4 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:hover:bg-white/6"
+            className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center border-y border-(--border) bg-(--panel-2) hover:bg-black/4 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
           >
             <span className="h-0.5 w-8 rounded-full bg-(--border) group-hover:bg-(--fg-muted)" />
           </div>

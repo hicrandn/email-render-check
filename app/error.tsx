@@ -14,7 +14,7 @@ export default function Error({
       <button
         type="button"
         onClick={() => retry()}
-        className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white dark:bg-white dark:text-zinc-900"
+        className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white"
       >
         Try again
       </button>
