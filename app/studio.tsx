@@ -151,10 +151,17 @@ function distinctCount(muts: Mutation[], severity: Severity): number {
 
 type PreviewScheme = 'light' | 'dark';
 
-// Visual card width (desktop column vs. a common phone) and the matching
-// engine viewport width passed into the RenderContext.
-const DEVICE_WIDTH: Record<Device, number> = { desktop: 680, mobile: 390 };
+// Engine viewport width per device. On desktop the preview column is a little
+// wider than the email; on a phone the screen is exactly the viewport, so
+// @media rules switch in the preview where the engine assumes they do.
 const DEVICE_VIEWPORT: Record<Device, number> = { desktop: 600, mobile: 375 };
+const DESKTOP_PREVIEW_WIDTH = 680;
+const PHONE_BEZEL = 10;
+
+/** "iOS/Android app" from "Gmail (iOS/Android app)". */
+function platformOf(id: ClientId): string {
+  return /\(([^)]+)\)/.exec(PROFILES[id].name)?.[1] ?? '';
+}
 
 // Issues are grouped by pipeline stage so dark-mode findings read distinctly
 // from feature-strip / sanitize ones.
@@ -167,14 +174,15 @@ const STAGE_LABELS: Record<MutationStage, string> = {
   quirk: 'Rendering quirks',
 };
 
-// A compact icon segmented control for the preview device + scheme pickers.
+// A compact segmented control for the preview device + scheme pickers. An
+// option with `text` shows it next to its icon.
 function Segmented<T extends string>({
   value,
   options,
   onPick,
 }: {
   value: T;
-  options: { id: T; label: string; icon: ReactNode }[];
+  options: { id: T; label: string; icon: ReactNode; text?: string }[];
   onPick: (v: T) => void;
 }) {
   return (
@@ -187,13 +195,16 @@ function Segmented<T extends string>({
           aria-label={o.label}
           aria-pressed={value === o.id}
           onClick={() => onPick(o.id)}
-          className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+          className={`flex h-6 items-center justify-center gap-1.5 rounded-md text-[11px] transition-colors ${
+            o.text ? 'px-2' : 'w-6'
+          } ${
             value === o.id
               ? 'bg-(--panel) text-(--fg) shadow-sm ring-1 ring-(--border)'
               : 'text-(--fg-muted) hover:text-(--fg)'
           }`}
         >
           {o.icon}
+          {o.text}
         </button>
       ))}
     </div>
@@ -443,6 +454,21 @@ export default function Studio() {
     e.preventDefault();
   }
 
+  const previewBody = activeError ? (
+    <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1 bg-(--panel) p-6 text-center">
+      <p className="text-xs text-(--fg-muted)">
+        Couldn&apos;t render this HTML for {shortName(active)} — see the note below.
+      </p>
+    </div>
+  ) : (
+    <iframe
+      title={`${active} preview`}
+      sandbox=""
+      srcDoc={result.html}
+      className="min-h-0 w-full flex-1 border-0"
+    />
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-(--canvas) text-(--fg)">
       {/* Top bar */}
@@ -544,16 +570,16 @@ export default function Studio() {
                 value={device}
                 onPick={setDevice}
                 options={[
-                  { id: 'desktop', label: 'Desktop width', icon: <HugeiconsIcon icon={ComputerIcon} size={12}  /> },
-                  { id: 'mobile', label: 'Mobile width', icon: <HugeiconsIcon icon={SmartPhone01Icon} size={12}  /> },
+                  { id: 'desktop', label: 'Desktop clients', text: 'Desktop', icon: <HugeiconsIcon icon={ComputerIcon} size={12} /> },
+                  { id: 'mobile', label: 'Phone apps', text: 'Phone', icon: <HugeiconsIcon icon={SmartPhone01Icon} size={12} /> },
                 ]}
               />
               <Segmented
                 value={previewScheme}
                 onPick={setPreviewScheme}
                 options={[
-                  { id: 'light', label: 'Light screen', icon: <HugeiconsIcon icon={Sun03Icon} size={12}  /> },
-                  { id: 'dark', label: 'Dark screen', icon: <HugeiconsIcon icon={Moon02Icon} size={12}  /> },
+                  { id: 'light', label: 'Light screen', icon: <HugeiconsIcon icon={Sun03Icon} size={12} /> },
+                  { id: 'dark', label: 'Dark screen', icon: <HugeiconsIcon icon={Moon02Icon} size={12} /> },
                 ]}
               />
             </div>
@@ -568,27 +594,43 @@ export default function Studio() {
               previewScheme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-(--preview-bg)'
             }`}
           >
-            <div
-              style={{ maxWidth: DEVICE_WIDTH[device] }}
-              className={`mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-md border transition-[max-width] ${
-                previewScheme === 'dark' ? 'border-white/10' : 'border-(--border)'
-              }`}
-            >
-              {activeError ? (
-                <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1 bg-(--panel) p-6 text-center">
-                  <p className="text-xs text-(--fg-muted)">
-                    Couldn&apos;t render this HTML for {shortName(active)} — see the note below.
-                  </p>
+            {device === 'mobile' ? (
+              // Phone: a bezel around a screen exactly the engine's viewport wide,
+              // with the app's name where its title bar would be.
+              <div
+                style={{ width: DEVICE_VIEWPORT.mobile + 2 * PHONE_BEZEL, padding: PHONE_BEZEL }}
+                className={`mx-auto flex min-h-0 flex-1 flex-col rounded-[40px] bg-zinc-900 ${
+                  previewScheme === 'dark' ? 'ring-1 ring-white/15' : ''
+                }`}
+              >
+                <div
+                  className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-[30px] ${
+                    previewScheme === 'dark' ? 'bg-black' : 'bg-white'
+                  }`}
+                >
+                  <div
+                    className={`flex h-9 shrink-0 items-center justify-center gap-1.5 border-b text-[11px] ${
+                      previewScheme === 'dark'
+                        ? 'border-white/10 text-white/85'
+                        : 'border-black/5 text-(--fg)'
+                    }`}
+                  >
+                    <span className="font-medium">{shortName(active)}</span>
+                    <span className="opacity-60">{platformOf(active)}</span>
+                  </div>
+                  {previewBody}
                 </div>
-              ) : (
-                <iframe
-                  title={`${active} preview`}
-                  sandbox=""
-                  srcDoc={result.html}
-                  className="min-h-0 w-full flex-1 border-0"
-                />
-              )}
-            </div>
+              </div>
+            ) : (
+              <div
+                style={{ maxWidth: DESKTOP_PREVIEW_WIDTH }}
+                className={`mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-md border ${
+                  previewScheme === 'dark' ? 'border-white/10' : 'border-(--border)'
+                }`}
+              >
+                {previewBody}
+              </div>
+            )}
           </div>
 
           {/* Draggable divider */}
