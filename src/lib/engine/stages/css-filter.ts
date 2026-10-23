@@ -4,7 +4,10 @@
 //
 //   n (unsupported) -> remove-property / remove-value; the declaration (or the
 //                      offending token) is actually removed from the output.
-//   a (partial)     -> warn-only; the declaration stays, notes appended.
+//   a (partial)     -> judged against the client's notes (partial.ts): kept
+//                      silently when inside what the client supports,
+//                      removed or rewritten when outside it, and kept with a
+//                      warning when the notes can't be checked.
 //
 // Value-level matches only affect that value: `display:flex` is removed for
 // outlook-win, but `display:block` is untouched.
@@ -22,6 +25,7 @@ import {
 import { isAttached, removeTokenFromDecl, type ParsedDeclaration } from '../parse/css';
 import type { StageContext } from './context';
 import { runCssRuleFilter } from './css-rules';
+import { judgeDeclaration, judgeImportant, type Judgement } from './partial';
 
 interface ValueAnalysis {
   keywords: Set<string>;
@@ -110,6 +114,11 @@ export function runCssFilter(ctx: StageContext): void {
       if (!isAttached(sheet, decl.decl)) continue;
       const analysis = analyzeValue(decl.value);
       const matches = findMatches(decl, analysis);
+      const subject = {
+        prop: decl.prop,
+        value: decl.value,
+        element: decl.origin === 'inline' ? decl.element.tagName : undefined,
+      };
 
       let handled = false;
       const warns: Mutation[] = [];
@@ -118,19 +127,30 @@ export function runCssFilter(ctx: StageContext): void {
         const feature = featureBySlug.get(match.slug);
         if (!feature) continue;
         const support = feature.support[clientId];
+        if (support.status !== 'n' && support.status !== 'a') continue;
 
+        // The important flag is judged by its spelling; the other notes are about values.
+        const judged = match.kind === 'important'
+          ? judgeImportant(support, (decl.decl.raws.important ?? '!important').trim(), decl.origin === 'inline')
+          : judgeDeclaration(support, subject);
+        if (judged && judged.kind !== 'ok' && judged.kind !== 'warn') {
+          const gone = applyJudgement(ctx, sheet, decl, match, feature, judged, removed);
+          if (gone) dropped.add(decl);
+          handled = gone || judged.kind === 'rewrite';
+          if (handled) break;
+          continue;
+        }
         if (support.status === 'n') {
           if (applyRemoval(ctx, sheet, decl, match, feature, removed)) dropped.add(decl);
           handled = true;
           break; // first unsupported match wins; the declaration is gone.
         }
-        if (support.status === 'a') {
-          warns.push(
-            buildMutation(clientId, decl, match, feature, 'warn-only', 'warning',
-              `${ctx.profile.name} has partial support for ${feature.title}. ` +
-                `The declaration was kept.` + notes(support.notes)),
-          );
-        }
+        if (judged?.kind === 'ok') continue;
+        warns.push(
+          buildMutation(clientId, decl, match, feature, 'warn-only', 'warning',
+            `${ctx.profile.name} has partial support for ${feature.title}. ` +
+              `The declaration was kept.` + notes(support.notes)),
+        );
       }
 
       if (!handled) {
@@ -142,11 +162,79 @@ export function runCssFilter(ctx: StageContext): void {
           ctx.mutations.push(w);
         }
       }
+      if (sheet.stripped) break;
     }
     // Later stages only see what the client kept.
-    sheet.declarations = sheet.declarations.filter(
-      (d) => !dropped.has(d) && isAttached(sheet, d.decl),
-    );
+    sheet.declarations = sheet.stripped
+      ? []
+      : sheet.declarations.filter((d) => !dropped.has(d) && isAttached(sheet, d.decl));
+  }
+}
+
+/**
+ * Act on a partial-support judgement other than ok/warn. Returns true when the
+ * declaration is gone from the output.
+ */
+function applyJudgement(
+  ctx: StageContext,
+  sheet: ParsedDeclaration['sheet'],
+  decl: ParsedDeclaration,
+  match: Match,
+  feature: NonNullable<ReturnType<typeof featureBySlug.get>>,
+  judged: Exclude<Judgement, { kind: 'ok' | 'warn' }>,
+  removed: WeakSet<object>,
+): boolean {
+  const support = feature.support[ctx.clientId];
+  const what = `\`${decl.prop}: ${decl.value}\``;
+  const said = `${ctx.profile.name} supports ${feature.title} only in part: ${judged.why}.`;
+  switch (judged.kind) {
+    case 'remove':
+      if (decl.removeToken) return applyRemoval(ctx, sheet, decl, match, feature, removed);
+      if (!removed.has(decl.decl)) {
+        decl.decl.remove();
+        removed.add(decl.decl);
+        sheet.dirty = true;
+      }
+      ctx.mutations.push(
+        buildMutation(ctx.clientId, decl, match, feature, 'remove-property', 'error',
+          `${said} ${what} was removed from the output.` + notes(support.notes)),
+      );
+      return true;
+    case 'rewrite': {
+      // A longhand derived from a shorthand can't be rewritten on its own.
+      if (decl.expandedFrom) return false;
+      decl.decl.prop = judged.prop;
+      decl.decl.value = judged.value;
+      sheet.dirty = true;
+      ctx.mutations.push(
+        // An unsupported feature the client turns into something else is an
+        // error like any removal; a partial one rendered differently is not.
+        buildMutation(ctx.clientId, decl, match, feature, 'rewrite',
+          support.status === 'n' ? 'error' : 'warning',
+          `${ctx.profile.name}: ${judged.why}, so ${what} renders as ` +
+            `\`${judged.prop}: ${judged.value}\`.` + notes(support.notes)),
+      );
+      return false;
+    }
+    case 'strip-attribute':
+      sheet.root.removeAll();
+      sheet.dirty = true;
+      ctx.mutations.push(
+        buildMutation(ctx.clientId, decl, match, feature, 'remove-attribute', 'error',
+          `${ctx.profile.name}: ${judged.why}. The \`style\` attribute on <${decl.element.tagName}> ` +
+            `was removed, with every declaration in it.` + notes(support.notes)),
+      );
+      return true;
+    case 'strip-block':
+      sheet.root.removeAll();
+      sheet.dirty = true;
+      sheet.stripped = true;
+      ctx.mutations.push(
+        buildMutation(ctx.clientId, decl, match, feature, 'remove-element', 'error',
+          `${ctx.profile.name}: ${judged.why}. The whole <style> element was removed, with ` +
+            `every rule in it.` + notes(support.notes)),
+      );
+      return true;
   }
 }
 

@@ -2,7 +2,9 @@
 // each Can I Email entry matches the snapshot.
 //
 //   n -> reported as an error, and the thing is gone from the output
-//   a -> reported as a warning (unless an unsupported entry already removed it)
+//   a -> judged against the client's notes (partial.ts, tested in
+//        partial.test.ts): kept, with or without a warning, or removed or
+//        rewritten with a report. Never removed silently.
 //   y / u -> not reported
 //
 // Each case lists every entry its HTML relies on, since the engine reports
@@ -45,7 +47,8 @@ const declCase = (name: string, decl: string, slugs: string[]): Case => ({
   name,
   html: `<div style="${decl}">x</div>`,
   slugs,
-  marker: new RegExp(escape(decl)),
+  // Not preceded by a name character, so `height` is not found in `min-height`.
+  marker: new RegExp(`(?<![\\w-])${escape(decl)}`),
 });
 
 const cssCases: Case[] = [];
@@ -213,16 +216,16 @@ function violations(client: ClientId, cases: Case[]): string[] {
       }
       if (c.marker && c.marker.test(html)) out.push(`${c.name}: unsupported but still in the output`);
     }
+    const changed = (slug: string) =>
+      reported(slug, (m) => m.severity === 'error' || m.action === 'rewrite');
     c.slugs.forEach((slug, i) => {
       const st = statuses[i];
-      if (st === 'a' && unsupported.length === 0 && !reported(slug, (m) => m.action === 'warn-only')) {
-        out.push(`${c.name}: ${slug} is partial but not reported as a warning`);
-      }
       if ((st === 'y' || st === 'u') && reported(slug, () => true)) {
         out.push(`${c.name}: ${slug} is supported but reported`);
       }
     });
-    if (unsupported.length === 0 && c.marker && !c.marker.test(html)) {
+    const partialChange = c.slugs.some((s, i) => statuses[i] === 'a' && changed(s));
+    if (unsupported.length === 0 && !partialChange && c.marker && !c.marker.test(html)) {
       out.push(`${c.name}: supported but missing from the output`);
     }
   }

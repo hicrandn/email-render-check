@@ -109,12 +109,8 @@ export interface SimulationResult {
 export interface ClientQuirks {
   /** Message is clipped past this size (Gmail = 102 KB). */
   maxSizeKB?: number;
-  /** max-width is ignored on non-table elements (Outlook/Word). */
-  ignoresMaxWidth?: boolean;
   /** Percentage widths render unreliably; needs fixed-width + ghost tables (Word). */
   unreliablePercentWidth?: boolean;
-  /** margin on block elements is ignored/inconsistent; use cell padding (Word). */
-  unreliableBlockMargin?: boolean;
 }
 
 // ---------------------------------------------------------------------------

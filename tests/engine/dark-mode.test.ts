@@ -221,21 +221,21 @@ describe('dark mode: determinism', () => {
   });
 });
 
-describe('quirks: Outlook percentage width + block margin', () => {
+describe('Outlook: percentage width, margin and padding', () => {
   it('warns on percentage width for outlook-win', () => {
     const { mutations } = simulate('<table style="width:100%"><tr><td>x</td></tr></table>', 'outlook-win');
     expect(byFeature(mutations, 'quirk-outlook-width')).toHaveLength(1);
   });
 
-  it('warns on margin on a block element for outlook-win', () => {
-    const { mutations } = simulate('<div style="margin:20px">x</div>', 'outlook-win');
-    const m = byFeature(mutations, 'quirk-outlook-margin');
-    expect(m.length).toBeGreaterThanOrEqual(1);
-    expect(m[0].severity).toBe('warning');
+  it('drops auto margins in outlook-win, so the element is not centered', () => {
+    const { mutations, html } = simulate('<div style="margin:20px auto">x</div>', 'outlook-win');
+    expect(byFeature(mutations, 'css-margin')[0].action).toBe('rewrite');
+    expect(html).toContain('margin:20px 0');
   });
 
-  it('does not flag margin:0 or non-outlook clients', () => {
-    expect(byFeature(simulate('<div style="margin:0">x</div>', 'outlook-win').mutations, 'quirk-outlook-margin')).toHaveLength(0);
-    expect(byFeature(simulate('<div style="margin:20px">x</div>', 'gmail').mutations, 'quirk-outlook-margin')).toHaveLength(0);
+  it('removes padding outside table cells in outlook-win', () => {
+    const { html } = simulate('<a style="padding:10px">x</a><table><tr><td style="padding:10px">y</td></tr></table>', 'outlook-win');
+    expect(html).toContain('<a>x</a>');
+    expect(html).toContain('<td style="padding:10px">');
   });
 });

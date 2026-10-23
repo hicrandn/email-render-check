@@ -5,7 +5,9 @@
 //   n (unsupported) -> remove-rule; an at-rule goes with everything inside it,
 //                      a selector is dropped from its rule's selector list
 //                      (the rule goes once no selector is left).
-//   a (partial)     -> warn-only; kept, notes appended.
+//   a (partial)     -> judged against the client's notes (partial.ts):
+//                      removed when outside what the client supports, kept
+//                      silently when inside it, warn-only otherwise.
 //
 // Runs before the declaration pass, so declarations inside a removed rule
 // are not checked or reported.
@@ -16,6 +18,7 @@ import type { Mutation } from '../types';
 import { featureBySlug } from '../data/snapshot';
 import { cssNodeLoc, isAttached, type StyleSheet } from '../parse/css';
 import type { StageContext } from './context';
+import { judgeMedia, judgeSelector, nestingFlattens, type SelectorSubject } from './partial';
 
 export const AT_RULE_SLUG: Record<string, string> = {
   media: 'css-at-media',
@@ -73,35 +76,62 @@ const COMBINATOR_SLUG: Record<string, string> = {
   '': 'css-selector-descendant',
 };
 
-/** caniemail slugs a single selector (one entry of a selector list) relies on. */
-function selectorSlugs(selector: selectorParser.Selector): string[] {
-  const slugs = new Set<string>();
+/**
+ * caniemail slugs a single selector (one entry of a selector list) relies on,
+ * with what partial.ts needs to judge a pseudo-class or attribute selector in
+ * the compound it sits in (`a:hover`, `td[class]`).
+ */
+function selectorSlugs(selector: selectorParser.Selector): Map<string, SelectorSubject | undefined> {
+  const slugs = new Map<string, SelectorSubject | undefined>();
+  const add = (slug: string, subject?: SelectorSubject) => {
+    if (!slugs.has(slug)) slugs.set(slug, subject);
+  };
+  // Top-level compounds; a pseudo-class's own arguments (`:not(.x)`) are not one.
+  const subjects = new Map<selectorParser.Node, SelectorSubject>();
+  let compound: selectorParser.Node[] = [];
+  const close = () => {
+    const hasType = compound.some((n) => n.type === 'tag');
+    const withClass = compound.some((n) => n.type === 'class');
+    for (const n of compound) {
+      if (n.type === 'pseudo') subjects.set(n, { hasType });
+      if (n.type === 'attribute') {
+        subjects.set(n, { hasType, operator: n.operator ?? '', attribute: n.attribute.toLowerCase(), withClass });
+      }
+    }
+    compound = [];
+  };
+  for (const node of selector.nodes) {
+    if (node.type === 'combinator') close();
+    else compound.push(node);
+  }
+  close();
+
   selector.walk((node) => {
     switch (node.type) {
       case 'combinator': {
         const slug = COMBINATOR_SLUG[node.value.trim()];
-        if (slug) slugs.add(slug);
+        if (slug) add(slug);
         break;
       }
       case 'universal':
-        slugs.add('css-selector-universal');
+        add('css-selector-universal');
         break;
       case 'attribute':
-        slugs.add('css-selector-attribute');
+        add('css-selector-attribute', subjects.get(node));
         break;
       case 'class':
-        slugs.add('css-selector-class');
+        add('css-selector-class');
         break;
       case 'id':
-        slugs.add('css-selector-id');
+        add('css-selector-id');
         break;
       case 'tag':
-        slugs.add('css-selector-type');
+        add('css-selector-type');
         break;
       case 'pseudo': {
         const name = node.value.replace(/^:+/, '').toLowerCase();
         const element = node.value.startsWith('::') || LEGACY_PSEUDO_ELEMENTS.has(name);
-        slugs.add(`css-pseudo-${element ? 'element' : 'class'}-${name}`);
+        add(`css-pseudo-${element ? 'element' : 'class'}-${name}`, subjects.get(node));
         break;
       }
     }
@@ -111,9 +141,16 @@ function selectorSlugs(selector: selectorParser.Selector): string[] {
   for (const node of selector.nodes) {
     if (node.type === 'combinator') chained = 0;
     else if (node.type === 'class' || node.type === 'id') chained++;
-    if (chained >= 2) slugs.add('css-selector-chaining');
+    if (chained >= 2) add('css-selector-chaining');
   }
-  return [...slugs];
+  return slugs;
+}
+
+function insideMedia(at: AtRule): boolean {
+  for (let p = at.parent; p; p = p.parent as AtRule['parent']) {
+    if (p.type === 'atrule' && (p as AtRule).name.toLowerCase() === 'media') return true;
+  }
+  return false;
 }
 
 function insideKeyframes(rule: Rule): boolean {
@@ -142,8 +179,13 @@ export function runCssRuleFilter(ctx: StageContext): void {
     });
     for (const rule of rules) {
       if (!isAttached(sheet, rule)) continue;
-      if (rule.parent?.type === 'rule' && !checkSlug(ctx, sheet, rule, 'css-nesting', rule.selector)) {
-        rule.remove();
+      // Yahoo drops a nested selector but keeps its declarations, which then
+      // apply to the parent selector.
+      const flatten = nestingFlattens(featureBySlug.get('css-nesting')!.support[ctx.clientId]);
+      if (rule.parent?.type === 'rule' && !checkSlug(ctx, sheet, rule, 'css-nesting', rule.selector,
+        flatten ? 'Its declarations apply to the parent selector instead.' : undefined)) {
+        if (flatten) rule.replaceWith(...(rule.nodes ?? []).filter((n) => n.type === 'decl'));
+        else rule.remove();
         sheet.dirty = true;
         continue;
       }
@@ -187,7 +229,8 @@ function checkComments(ctx: StageContext, sheet: StyleSheet): void {
 
 /**
  * Report one slug for a rule. Returns false when the client does not support
- * it; the caller decides what to drop.
+ * it (or, for partial support, not in this form); the caller decides what to
+ * drop.
  */
 function checkSlug(
   ctx: StageContext,
@@ -196,12 +239,18 @@ function checkSlug(
   slug: string,
   selector: string,
   dropping = 'The rule was removed.',
+  subject?: SelectorSubject,
 ): boolean {
   const feature = featureBySlug.get(slug);
   if (!feature) return true;
   const support = feature.support[ctx.clientId];
   const loc = cssNodeLoc(sheet, ctx.parsed.lineIndex, rule);
-  if (support.status === 'n') {
+  // Without a subject (class, id, combinators) only notes that need none apply.
+  const judged = support.status === 'a' ? judgeSelector(support, subject ?? { hasType: true }) : undefined;
+  if (support.status === 'n' || judged?.kind === 'remove') {
+    const why = judged?.kind === 'remove'
+      ? `supports ${feature.title} only in part: ${judged.why}`
+      : `does not support ${feature.title}`;
     ctx.mutations.push({
       client: ctx.clientId,
       stage: 'css-filter',
@@ -210,13 +259,13 @@ function checkSlug(
       feature: slug,
       severity: 'error',
       reason:
-        `${ctx.profile.name} does not support ${feature.title}, so \`${selector}\` never ` +
-        `matches. ${dropping}` + notes(support.notes),
+        `${ctx.profile.name} ${why}, so \`${selector}\` never matches. ${dropping}` +
+        notes(support.notes),
       evidence: feature.url,
     });
     return false;
   }
-  if (support.status === 'a') {
+  if (support.status === 'a' && judged?.kind !== 'ok') {
     ctx.mutations.push({
       client: ctx.clientId,
       stage: 'css-filter',
@@ -246,11 +295,11 @@ function checkSelectors(ctx: StageContext, sheet: StyleSheet, rule: Rule): void 
     const text = selector.toString().trim();
     const others = selectors.length > 1;
     let supported = true;
-    for (const slug of selectorSlugs(selector)) {
+    for (const [slug, subject] of selectorSlugs(selector)) {
       // Report only the first unsupported slug; the selector is gone after it.
       if (!checkSlug(ctx, sheet, rule, slug, text, others
         ? 'It was dropped from the selector list; the other selectors still apply.'
-        : undefined)) {
+        : undefined, subject)) {
         supported = false;
         break;
       }
@@ -280,7 +329,20 @@ function checkAtRule(ctx: StageContext, sheet: StyleSheet, at: AtRule): void {
       sheet.dirty = true;
       return;
     }
-    if (support.status === 'a') {
+    const judged = slug === 'css-at-media' && support.status === 'a'
+      ? judgeMedia(support, at.params, insideMedia(at))
+      : undefined;
+    if (judged?.kind === 'remove') {
+      ctx.mutations.push(
+        mutation(ctx, sheet, at, slug, feature.url, 'remove-rule', 'error',
+          `${ctx.profile.name} supports ${feature.title} only in part: ${judged.why}. The ` +
+            `\`${rule}\` rule was removed with everything inside it.` + notes(support.notes)),
+      );
+      at.remove();
+      sheet.dirty = true;
+      return;
+    }
+    if (support.status === 'a' && judged?.kind !== 'ok') {
       warns.push(
         mutation(ctx, sheet, at, slug, feature.url, 'warn-only', 'warning',
           `${ctx.profile.name} has partial support for ${feature.title}. The \`${rule}\` ` +

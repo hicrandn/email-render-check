@@ -33,13 +33,17 @@ describe('css-filter: value-level (display:flex)', () => {
     expect(out).toContain('display:flex');
   });
 
-  it('does not touch display:block for outlook-win', () => {
-    const { mutations, html: out } = simulate(
-      `<div style="display:block;">x</div>`,
-      'outlook-win',
-    );
+  it('does not treat display:block as flex', () => {
+    const { mutations, html: out } = simulate(`<div style="display:block;">x</div>`, 'gmail');
     expect(byFeature(mutations, 'css-display-flex')).toHaveLength(0);
     expect(out).toContain('display:block');
+  });
+
+  it('keeps only display:none for outlook-win, as its note says', () => {
+    const { mutations, html: out } = simulate(`<div style="display:block;">x</div>`, 'outlook-win');
+    expect(byFeature(mutations, 'css-display-flex')).toHaveLength(0);
+    expect(byFeature(mutations, 'css-display')[0].action).toBe('remove-property');
+    expect(out).not.toContain('display:block');
   });
 });
 
@@ -180,13 +184,20 @@ describe('css-filter: longhands, logical properties and keywords', () => {
     expect(byFeature(mutations, 'css-left-right-top-bottom')).toHaveLength(1);
   });
 
-  it('warns on margin-top (partial in gmail)', () => {
-    const { mutations } = simulate('<div style="margin-top:10px">x</div>', 'gmail');
-    expect(byFeature(mutations, 'css-margin')[0].action).toBe('warn-only');
+  it('keeps a positive margin in gmail (only negative values are unsupported)', () => {
+    const { mutations, html: out } = simulate('<div style="margin-top:10px">x</div>', 'gmail');
+    expect(byFeature(mutations, 'css-margin')).toHaveLength(0);
+    expect(out).toContain('margin-top:10px');
+  });
+
+  it('removes a negative margin in gmail', () => {
+    const { mutations, html: out } = simulate('<div style="margin-top:-10px">x</div>', 'gmail');
+    expect(byFeature(mutations, 'css-margin')[0].action).toBe('remove-property');
+    expect(out).not.toContain('margin-top');
   });
 
   it('does not count a shorthand twice through its expanded longhands', () => {
-    const { mutations } = simulate('<div style="margin:10px 20px">x</div>', 'gmail');
+    const { mutations } = simulate('<div style="margin:-10px 20px">x</div>', 'gmail');
     expect(byFeature(mutations, 'css-margin')).toHaveLength(1);
   });
 
@@ -210,11 +221,19 @@ describe('css-filter: variables, !important and keywords', () => {
     expect(out).toContain('var(--brand)');
   });
 
-  it('warns once on !important (partial in gmail), even on a shorthand', () => {
-    const { mutations } = simulate('<p style="margin:0 !important">x</p>', 'gmail');
+  it('warns once on !important (partial in yahoo), even on a shorthand', () => {
+    const { mutations } = simulate('<p style="margin:0 !important">x</p>', 'yahoo');
     const m = byFeature(mutations, 'css-important');
     expect(m).toHaveLength(1);
     expect(m[0].action).toBe('warn-only');
+  });
+
+  it('keeps lowercase !important in gmail, and drops the attribute for any other spelling', () => {
+    expect(byFeature(simulate('<p style="margin:0 !important">x</p>', 'gmail').mutations, 'css-important'))
+      .toHaveLength(0);
+    const upper = simulate('<p style="color:red !IMPORTANT;font-size:20px">x</p>', 'gmail');
+    expect(byFeature(upper.mutations, 'css-important')[0].action).toBe('remove-attribute');
+    expect(upper.html).toContain('<p>x</p>');
   });
 
   it('drops only system-ui from a font stack in outlook-win', () => {
@@ -324,9 +343,16 @@ describe('sanitize: semantics, lists, style, doctype', () => {
     expect(out).toContain('<p>x</p>');
   });
 
-  it('warns on <section> in gmail (partial)', () => {
-    expect(byFeature(simulate('<section>x</section>', 'gmail').mutations, 'html-semantics')[0].action)
-      .toBe('warn-only');
+  it('keeps <section> in gmail, which only drops <details>, <main>, <nav> and <summary>', () => {
+    expect(byFeature(simulate('<section>x</section>', 'gmail').mutations, 'html-semantics')).toHaveLength(0);
+    const nav = simulate('<nav>x</nav>', 'gmail');
+    expect(byFeature(nav.mutations, 'html-semantics')[0].action).toBe('unwrap-element');
+    expect(nav.html).not.toContain('<nav');
+  });
+
+  it('keeps only <time> in outlook-com', () => {
+    expect(simulate('<time>x</time>', 'outlook-com').html).toContain('<time');
+    expect(simulate('<section>x</section>', 'outlook-com').html).not.toContain('<section');
   });
 
   it('warns on lists where support is partial', () => {
@@ -334,10 +360,22 @@ describe('sanitize: semantics, lists, style, doctype', () => {
     expect(byFeature(simulate('<ul><li>x</li></ul>', 'apple-mail').mutations, 'html-lists')).toHaveLength(0);
   });
 
-  it('warns on <style> in gmail and keeps it', () => {
+  it('keeps a <style> in the head in gmail without a warning', () => {
     const { html: out, mutations } = simulate('<style>p{color:red}</style><p>x</p>', 'gmail');
-    expect(byFeature(mutations, 'html-style')[0].action).toBe('warn-only');
+    expect(byFeature(mutations, 'html-style')).toHaveLength(0);
     expect(out).toContain('p{color:red}');
+  });
+
+  it('removes a <style> inside <body> in gmail', () => {
+    const { html: out, mutations } = simulate('<body><p>x</p><style>p{color:red}</style></body>', 'gmail');
+    expect(byFeature(mutations, 'html-style')[0].action).toBe('remove-element');
+    expect(out).not.toContain('p{color:red}');
+    expect(simulate('<body><p>x</p><style>p{color:red}</style></body>', 'apple-mail').html).toContain('p{color:red}');
+  });
+
+  it('removes a <style> over 16 KB in gmail', () => {
+    const big = `<style>${'.a{color:red}'.repeat(1400)}</style><p>x</p>`;
+    expect(byFeature(simulate(big, 'gmail').mutations, 'html-style')[0].action).toBe('remove-element');
   });
 
   it('reports the HTML5 doctype in outlook-win without removing it', () => {

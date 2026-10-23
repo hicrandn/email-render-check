@@ -46,6 +46,8 @@ export interface StyleSheet {
   declarations: ParsedDeclaration[];
   /** Set by stages when the root is mutated; triggers write-back in the engine. */
   dirty: boolean;
+  /** The client dropped the whole <style> element or style attribute. */
+  stripped?: boolean;
 }
 
 const EXPANDABLE = new Set(['border', 'background', 'font', 'margin', 'padding']);

@@ -5,14 +5,16 @@
 //   - default action for an unsupported element:   unwrap-element (keep children)
 //   - REMOVE_WHEN_UNSUPPORTED / SECURITY_ALWAYS:    remove-element (drop subtree)
 //   - unsupported attribute or <img> format:        remove-attribute
-//   - partial support (a):                          warn-only (kept)
-import type { Mutation } from '../types';
+//   - partial support (a):                          per the notes (partial.ts),
+//     e.g. Gmail's <style> limits; otherwise warn-only (kept)
+import type { ClientSupport, Mutation } from '../types';
 import { featureBySlug } from '../data/snapshot';
 import {
   walkElements,
   elementLoc,
   attrLoc,
   getAttr,
+  isTextNode,
   type Attribute,
   type DocumentType,
   type Element,
@@ -20,6 +22,7 @@ import {
   type ChildNode,
 } from '../parse/html';
 import type { StageContext } from './context';
+import { judgeDeclaration, styleElementLimits, unsupportedTag } from './partial';
 
 /** tag name -> caniemail html slug (used for support lookup + evidence). */
 export const ELEMENT_SLUG: Record<string, string> = {
@@ -289,6 +292,26 @@ export function runSanitize(ctx: StageContext): void {
         evidence: feature.url,
       });
     } else if (support.status === 'a') {
+      const dropped = partialDrop(ctx, el, slug, support);
+      if (dropped === 'ok') return;
+      if (dropped) {
+        const remove = REMOVE_WHEN_UNSUPPORTED.has(tag);
+        ops.push({ el, apply: remove ? 'remove' : 'unwrap' });
+        ctx.mutations.push({
+          client: clientId,
+          stage: 'sanitize',
+          action: remove ? 'remove-element' : 'unwrap-element',
+          target: { element: tag, loc: elementLoc(el) },
+          feature: slug,
+          severity: 'error',
+          reason:
+            `${ctx.profile.name} supports ${feature.title} only in part: ${dropped}. The <${tag}> ` +
+            `element was ${remove ? 'removed with its contents' : 'unwrapped: the tag is gone, its contents stay'}.` +
+            appendNotes(support.notes),
+          evidence: feature.url,
+        });
+        return;
+      }
       ctx.mutations.push({
         client: clientId,
         stage: 'sanitize',
@@ -319,6 +342,41 @@ export function runSanitize(ctx: StageContext): void {
   });
 }
 
+/**
+ * For a partially supported element: why the client drops this one, 'ok' when
+ * the notes say it is kept as is, or null when they can't be checked.
+ */
+function partialDrop(
+  ctx: StageContext,
+  el: Element,
+  slug: string,
+  support: ClientSupport,
+): string | 'ok' | null {
+  if (slug === 'html-semantics') {
+    const dropped = unsupportedTag(support, el.tagName);
+    if (dropped === null) return null;
+    return dropped ? `<${el.tagName}> is not one of the elements it keeps` : 'ok';
+  }
+  if (slug === 'html-style') {
+    const limits = styleElementLimits(support);
+    if (!limits.inBody && insideBody(el)) return '<style> is not supported inside <body>';
+    const text = el.childNodes.find(isTextNode)?.value ?? '';
+    const kb = new TextEncoder().encode(text).length / 1024;
+    if (limits.maxKB !== undefined && kb > limits.maxKB) {
+      return `a <style> element is limited to ${limits.maxKB} KB and this one is ${kb.toFixed(1)} KB`;
+    }
+    return limits.other ? null : 'ok';
+  }
+  return null;
+}
+
+function insideBody(el: Element): boolean {
+  for (let p = el.parentNode as Element | null; p && 'tagName' in p; p = p.parentNode as Element | null) {
+    if (p.tagName === 'body') return true;
+  }
+  return false;
+}
+
 function checkAttribute(ctx: StageContext, el: Element, attr: Attribute): void {
   const warns: Mutation[] = [];
   for (const slug of attributeSlugs(el, attr)) {
@@ -326,7 +384,12 @@ function checkAttribute(ctx: StageContext, el: Element, attr: Attribute): void {
     if (!feature) continue;
     const support = feature.support[ctx.clientId];
     if (support.status !== 'n' && support.status !== 'a') continue;
-    const removed = support.status === 'n';
+    // Partial: the notes may say which elements or values it works with.
+    const judged = support.status === 'a'
+      ? judgeDeclaration(support, { prop: attr.name, value: attr.value, element: el.tagName })
+      : null;
+    if (judged?.kind === 'ok') continue;
+    const removed = support.status === 'n' || judged?.kind === 'remove';
     // An image the client cannot show: dropping src shows what the reader gets.
     const consequence = attr.name === 'src' ? ', so the image does not display' : '';
     const mutation: Mutation = {
@@ -343,8 +406,8 @@ function checkAttribute(ctx: StageContext, el: Element, attr: Attribute): void {
       severity: removed ? 'error' : 'warning',
       reason:
         (removed
-          ? `${ctx.profile.name} does not support ${feature.title}. \`${attr.name}\` was ` +
-            `removed from <${el.tagName}>${consequence}.`
+          ? `${ctx.profile.name} ${judged?.kind === 'remove' ? `supports ${feature.title} only in part: ${judged.why}` : `does not support ${feature.title}`}. ` +
+            `\`${attr.name}\` was removed from <${el.tagName}>${consequence}.`
           : `${ctx.profile.name} has partial support for ${feature.title}. \`${attr.name}\` ` +
             `on <${el.tagName}> was kept.`) + appendNotes(support.notes),
       evidence: feature.url,

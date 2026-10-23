@@ -38,10 +38,23 @@ describe('css-filter: @media follows caniemail', () => {
     expect(q[0].severity).toBe('error');
   });
 
-  it('keeps @media but warns for Yahoo (partial support)', () => {
+  it('keeps a max-width @media for Yahoo, which supports width queries', () => {
     const { html: out, mutations } = simulate(html, 'yahoo');
     expect(out).toContain('@media');
-    expect(byFeature(mutations, 'css-at-media')[0].action).toBe('warn-only');
+    expect(byFeature(mutations, 'css-at-media')).toHaveLength(0);
+  });
+
+  it('removes a max-device-width @media for Yahoo', () => {
+    const { html: out, mutations } = simulate(
+      '<style>@media (max-device-width:600px){ .x { color: red; } }</style><p class="x">x</p>', 'yahoo');
+    expect(out).not.toContain('@media');
+    expect(byFeature(mutations, 'css-at-media')[0].action).toBe('remove-rule');
+  });
+
+  it('removes a height-based @media for Gmail', () => {
+    const { html: out } = simulate(
+      '<style>@media (max-height:600px){ .x { color: red; } }</style><p class="x">x</p>', 'gmail');
+    expect(out).not.toContain('@media');
   });
 
   it('keeps @media untouched for Apple Mail', () => {
@@ -86,19 +99,19 @@ describe('css-filter: at-rules and media features', () => {
   });
 });
 
-describe('quirks: Outlook ignores max-width', () => {
-  it('warns about max-width on a non-table element', () => {
-    const html = `<div style="max-width:600px">x</div>`;
-    const { mutations } = simulate(html, 'outlook-win');
-    const q = byFeature(mutations, 'quirk-outlook-maxwidth');
+describe('css-filter: Outlook keeps max-width on tables only', () => {
+  it('removes max-width from a non-table element', () => {
+    const { mutations, html: out } = simulate(`<div style="max-width:600px">x</div>`, 'outlook-win');
+    const q = byFeature(mutations, 'css-max-width');
     expect(q).toHaveLength(1);
-    expect(q[0].severity).toBe('warning');
-    expect(q[0].target.property).toBe('max-width');
+    expect(q[0].severity).toBe('error');
+    expect(out).not.toContain('max-width');
   });
 
-  it('does not warn for Gmail', () => {
-    const { mutations } = simulate(`<div style="max-width:600px">x</div>`, 'gmail');
-    expect(byFeature(mutations, 'quirk-outlook-maxwidth')).toHaveLength(0);
+  it('keeps it on a table, and in Gmail', () => {
+    expect(simulate(`<table style="max-width:600px"><tr><td>x</td></tr></table>`, 'outlook-win').html)
+      .toContain('max-width:600px');
+    expect(simulate(`<div style="max-width:600px">x</div>`, 'gmail').html).toContain('max-width:600px');
   });
 });
 

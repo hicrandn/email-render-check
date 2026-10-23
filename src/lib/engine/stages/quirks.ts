@@ -1,8 +1,9 @@
 // Quirks stage: per-client rendering behaviors that go beyond feature support.
 // (@media support is feature support and is handled by the CSS filter.)
 //
-//   - Outlook (Word): ignores max-width on non-table elements, computes
-//     percentage widths differently, and drops margin on block elements.
+//   - Outlook (Word): computes percentage widths differently. (Where Word
+//     drops max-width, padding or margin, Can I Email's notes say so and the
+//     CSS filter acts on them: partial.ts.)
 //   - Gmail: clips messages larger than ~102 KB and shows a "[Message clipped]"
 //     notice. Handled after serialization (it is a raw byte-level cut).
 //   - Phones: fixed widths wider than the screen (mobile-fit.ts).
@@ -13,44 +14,9 @@ import { checkMobileFit } from './mobile-fit';
 const GMAIL_CLIP_DOC =
   'https://github.com/hteumeuleu/email-bugs/issues/41'; // documents Gmail's 102KB clipping
 
-// Block-level elements whose CSS margin Word renders inconsistently.
-const BLOCK_TAGS = new Set([
-  'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
-  'blockquote', 'section', 'header', 'footer', 'article', 'main', 'nav',
-]);
-const MARGIN_PROPS = new Set(['margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left']);
-
 /** AST / stylesheet quirks. Runs before serialization. */
 export function runQuirks(ctx: StageContext): void {
   const q = ctx.profile.quirks;
-
-  // --- Outlook ignores max-width on non-table elements -----------------------
-  if (q.ignoresMaxWidth) {
-    for (const sheet of ctx.sheets) {
-      for (const decl of sheet.declarations) {
-        if (decl.prop !== 'max-width') continue;
-        if (decl.element.tagName === 'table' || decl.element.tagName === 'td') continue;
-        ctx.mutations.push({
-          client: ctx.clientId,
-          stage: 'quirk',
-          action: 'warn-only',
-          target: {
-            loc: decl.loc,
-            element: decl.element.tagName,
-            property: 'max-width',
-            value: decl.value,
-          },
-          feature: 'quirk-outlook-maxwidth',
-          severity: 'warning',
-          reason:
-            `${ctx.profile.name} ignores \`max-width\` on <${decl.element.tagName}>. ` +
-            `The Word engine renders at a fixed width and will let this element grow ` +
-            `past ${decl.value}. Constrain layout with a fixed-width <table> instead.`,
-          evidence: 'https://www.caniemail.com/features/css-max-width/',
-        });
-      }
-    }
-  }
 
   // --- Outlook computes percentage table widths differently ------------------
   if (q.unreliablePercentWidth) {
@@ -77,36 +43,6 @@ export function runQuirks(ctx: StageContext): void {
           fix:
             'Use a fixed-width <table width="600"> wrapped in an Outlook ghost table ' +
             '(<!--[if mso]><table width="600">…<![endif]-->) so Word renders a constrained column.',
-        });
-      }
-    }
-  }
-
-  // --- Outlook ignores/mis-renders margin on block elements ------------------
-  if (q.unreliableBlockMargin) {
-    for (const sheet of ctx.sheets) {
-      for (const decl of sheet.declarations) {
-        if (decl.expandedFrom) continue; // avoid duplicating expanded margin longhands
-        if (!MARGIN_PROPS.has(decl.prop)) continue;
-        if (!BLOCK_TAGS.has(decl.element.tagName)) continue;
-        if (!/[1-9]/.test(decl.value)) continue; // skip margin:0
-        ctx.mutations.push({
-          client: ctx.clientId,
-          stage: 'quirk',
-          action: 'warn-only',
-          target: {
-            loc: decl.loc,
-            element: decl.element.tagName,
-            property: decl.prop,
-            value: decl.value,
-          },
-          feature: 'quirk-outlook-margin',
-          severity: 'warning',
-          reason:
-            `${ctx.profile.name} (Word engine) renders \`${decl.prop}\` on block elements like ` +
-            `<${decl.element.tagName}> inconsistently and often drops it. Spacing may collapse.`,
-          evidence: 'https://www.caniemail.com/features/css-margin/',
-          fix: 'Move the spacing to padding on a wrapping <td> instead of margin on the block element.',
         });
       }
     }

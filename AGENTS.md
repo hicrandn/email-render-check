@@ -44,6 +44,11 @@ pnpm update-caniemail   # refresh src/lib/engine/data/caniemail.json
      (`mobile-fit.ts`) fixed widths wider than a phone screen
 - Support decisions come from the Can I Email snapshot (`supportFor` in
   `data/snapshot.ts`); profiles only hold what Can I Email does not track.
+  Partial ("a") entries are judged against their notes in
+  `stages/partial.ts` ("Only supported on table cells", "Negative values are
+  not supported"…): kept, removed or rewritten accordingly. Rules match note
+  text, so a reworded note falls back to a plain warning;
+  `tests/engine/partial.test.ts` pins them to the current notes.
 - `src/lib/engine/profiles/` — one file per client: device, quirks and dark-mode
   strategy. `CLIENTS_BY_DEVICE` and `clientOn` map clients between desktop
   and phone. Phone clients' snapshot entries are the worse of iOS and Android.
