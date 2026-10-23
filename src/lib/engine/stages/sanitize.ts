@@ -283,8 +283,8 @@ export function runSanitize(ctx: StageContext): void {
         feature: slug,
         severity: 'error',
         reason:
-          `${ctx.profile.name} does not support the <${tag}> element ` +
-          `(${feature.title}). It was ${remove ? 'removed entirely' : 'unwrapped (tag dropped, contents kept)'}.` +
+          `${ctx.profile.name} does not support the <${tag}> element${titleSuffix(tag, feature.title)}. ` +
+          `It was ${remove ? 'removed with its contents' : 'unwrapped: the tag is gone, its contents stay'}.` +
           appendNotes(support.notes),
         evidence: feature.url,
       });
@@ -297,8 +297,8 @@ export function runSanitize(ctx: StageContext): void {
         feature: slug,
         severity: 'warning',
         reason:
-          `${ctx.profile.name} has partial support for the <${tag}> element ` +
-          `(${feature.title}). It was kept, but may render inconsistently.` +
+          `${ctx.profile.name} has partial support for the <${tag}> element${titleSuffix(tag, feature.title)}. ` +
+          `It was kept, but may render differently.` +
           appendNotes(support.notes),
         evidence: feature.url,
       });
@@ -404,6 +404,11 @@ function securityMutation(ctx: StageContext, el: Element, tag: string): Mutation
       `removed entirely. This applies to every client, not just ${ctx.profile.name}.`,
     evidence: evidenceFor(tag, slug),
   };
+}
+
+/** The caniemail title, unless it only repeats the tag (`<style> element`). */
+function titleSuffix(tag: string, title: string): string {
+  return title.toLowerCase().includes(`<${tag}`) ? '' : ` (${title})`;
 }
 
 function appendNotes(notes: string[]): string {
