@@ -7,9 +7,9 @@ flags incompatibilities — which client, which feature, and why.
 ## Commands
 
 ```bash
-npm run dev              # start the dev UI at http://localhost:3000
-npm run build            # production build
-npm test                 # run the test suite
-npm run update-caniemail # refresh the email client support data
-npm run lint             # eslint
+pnpm dev                # start the dev UI at http://localhost:3000
+pnpm build              # production build
+pnpm test               # run the test suite
+pnpm update-caniemail   # refresh the email client support data
+pnpm lint               # eslint
 ```
