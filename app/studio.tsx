@@ -11,11 +11,11 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import { simulate } from '@/src/lib/engine/engine';
-import { PROFILES } from '@/src/lib/engine/profiles';
+import { CLIENTS_BY_DEVICE, PROFILES, clientOn } from '@/src/lib/engine/profiles';
 import { snapshot } from '@/src/lib/engine/data/snapshot';
 import {
-  CLIENT_IDS,
   type ClientId,
+  type Device,
   type Mutation,
   type MutationStage,
   type RenderContext,
@@ -150,7 +150,6 @@ function distinctCount(muts: Mutation[], severity: Severity): number {
 }
 
 type PreviewScheme = 'light' | 'dark';
-type Device = 'desktop' | 'mobile';
 
 // Visual card width (desktop column vs. a common phone) and the matching
 // engine viewport width passed into the RenderContext.
@@ -292,7 +291,9 @@ function IssueRow({ items, onSelect }: { items: Mutation[]; onSelect: (m: Mutati
 export default function Studio() {
   const [source, setSource] = useState(SAMPLE);
   const [debounced, setDebounced] = useState(SAMPLE);
-  const [active, setActive] = useState<ClientId>('gmail');
+  // The client last picked, on either device; `active` is its counterpart on
+  // the current device, so switching device and back returns to the same tab.
+  const [picked, setPicked] = useState<ClientId>('gmail');
   const viewRef = useRef<CmView | null>(null);
 
   // How the email is previewed (independent of the studio's own theme): the
@@ -300,6 +301,10 @@ export default function Studio() {
   // screen — because the same email is opened on phones and dark clients.
   const [device, setDevice] = useState<Device>('desktop');
   const [previewScheme, setPreviewScheme] = useState<PreviewScheme>('light');
+  // Phones run the clients' apps, not their desktop versions, so the device
+  // also picks which clients are simulated.
+  const clients = CLIENTS_BY_DEVICE[device];
+  const active = clientOn(device, picked);
 
   // Draggable divider between the preview and the issues panel.
   const splitRef = useRef<HTMLDivElement>(null);
@@ -320,7 +325,7 @@ export default function Studio() {
   );
 
   // The active client is simulated synchronously — it's the only one the
-  // interactive typing path needs right away. The other 4 (needed only for
+  // interactive typing path needs right away. The others (needed only for
   // the tab badge counts) are computed off that path, one at a time during
   // idle time, so a large email doesn't block every keystroke on 5x the work.
   const activeResult = useMemo(
@@ -331,7 +336,7 @@ export default function Studio() {
 
   useEffect(() => {
     let cancelled = false;
-    const others = CLIENT_IDS.filter((id) => id !== active);
+    const others = clients.filter((id) => id !== active);
 
     function step(i: number) {
       if (cancelled || i >= others.length) return;
@@ -345,9 +350,9 @@ export default function Studio() {
     return () => {
       cancelled = true;
     };
-  }, [debounced, renderCtx, active]);
+  }, [debounced, renderCtx, active, clients]);
 
-  // Active client always has a fresh result; the other 4 fill in progressively.
+  // Active client always has a fresh result; the others fill in progressively.
   const results: Partial<Record<ClientId, ClientResult>> = {
     ...backgroundResults,
     [active]: activeResult,
@@ -486,7 +491,7 @@ export default function Studio() {
             className="flex shrink-0 items-stretch gap-2 border-b border-(--border) bg-(--panel) px-2"
           >
             <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
-            {CLIENT_IDS.map((id) => {
+            {clients.map((id) => {
               const res = results[id];
               const isActive = active === id;
               // Badge shows the count of the worst severity present, colored to
@@ -502,7 +507,7 @@ export default function Studio() {
                   key={id}
                   role="tab"
                   aria-selected={isActive}
-                  onClick={() => setActive(id)}
+                  onClick={() => setPicked(id)}
                   className={`relative flex shrink-0 items-center gap-2 px-3 py-2.5 text-xs transition-colors ${
                     isActive
                       ? 'font-medium text-(--fg) after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:bg-(--fg)'
