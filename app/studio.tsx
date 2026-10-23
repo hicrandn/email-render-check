@@ -32,53 +32,13 @@ import {
   Sun03Icon,
 } from '@hugeicons/core-free-icons';
 import type { CmView } from './editor';
+import { SAMPLE } from './sample';
 
 // CodeMirror touches the DOM — load it client-side only.
 const Editor = dynamic(() => import('./editor'), {
   ssr: false,
   loading: () => <div className="p-4 text-sm text-zinc-500">Loading editor…</div>,
 });
-
-const SAMPLE = `<!doctype html>
-<html>
-  <head>
-    <style>
-      .card { display: flex; border-radius: 8px; padding: 16px; }
-      .hero { background: #ffffff url(hero.png) no-repeat center; }
-    </style>
-  </head>
-  <body style="margin:0;background:#f4f4f7;font-family:Arial,sans-serif">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:40px 0">
-      <tr><td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0"
-               style="background:#ffffff;border-radius:8px;overflow:hidden">
-          <tr><td align="center" style="background:#2563eb;padding:36px 32px">
-            <h1 style="margin:0;color:#ffffff;font-size:28px">Your order has shipped</h1>
-          </td></tr>
-
-          <tr><td class="card" style="display:flex;gap:12px;padding:36px 40px 24px">
-            <p style="margin:0;color:#4b5563;font-size:15px;line-height:1.6">
-              Order #10423 left our warehouse this morning and should arrive within
-              3–5 business days. Use the link below to follow it.
-            </p>
-          </td></tr>
-
-          <tr><td align="center" style="padding:0 40px 36px">
-            <a href="https://example.com/track" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 28px;display:inline-block;font-size:15px;font-weight:bold;border-radius:999px;box-shadow:0 6px 16px rgba(37,99,235,0.35)">
-              Track your package
-            </a>
-          </td></tr>
-
-          <tr><td align="center" style="background:#f9fafb;padding:20px 40px">
-            <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6">
-              Questions about your order? Just reply to this email.
-            </p>
-          </td></tr>
-        </table>
-      </td></tr>
-    </table>
-  </body>
-</html>`;
 
 const SEVERITY: Record<Mutation['severity'], { dot: string; label: string }> = {
   error: { dot: 'bg-red-500', label: 'Error' },
