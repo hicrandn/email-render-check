@@ -33,6 +33,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import type { CmView } from './editor';
 import { SAMPLE } from './sample';
+import PhoneFrame, { PHONE_SCREEN } from './phone-frame';
 
 // CodeMirror touches the DOM — load it client-side only.
 const Editor = dynamic(() => import('./editor'), {
@@ -152,11 +153,9 @@ function distinctCount(muts: Mutation[], severity: Severity): number {
 type PreviewScheme = 'light' | 'dark';
 
 // Engine viewport width per device. On desktop the preview column is a little
-// wider than the email; on a phone the screen is exactly the viewport, so
-// @media rules switch in the preview where the engine assumes they do.
-const DEVICE_VIEWPORT: Record<Device, number> = { desktop: 600, mobile: 375 };
+// wider than the email; on a phone it is the phone frame's screen.
+const DEVICE_VIEWPORT: Record<Device, number> = { desktop: 600, mobile: PHONE_SCREEN.width };
 const DESKTOP_PREVIEW_WIDTH = 680;
-const PHONE_BEZEL = 10;
 
 /** "iOS/Android app" from "Gmail (iOS/Android app)". */
 function platformOf(id: ClientId): string {
@@ -568,7 +567,11 @@ export default function Studio() {
             <div className="flex shrink-0 items-center gap-1.5 py-1.5">
               <Segmented
                 value={device}
-                onPick={setDevice}
+                onPick={(d) => {
+                  setDevice(d);
+                  // A phone is tall: give the preview more of the split.
+                  if (d === 'mobile') setPreviewPct((pct) => Math.max(pct, 70));
+                }}
                 options={[
                   { id: 'desktop', label: 'Desktop clients', text: 'Desktop', icon: <HugeiconsIcon icon={ComputerIcon} size={12} /> },
                   { id: 'mobile', label: 'Phone apps', text: 'Phone', icon: <HugeiconsIcon icon={SmartPhone01Icon} size={12} /> },
@@ -595,32 +598,13 @@ export default function Studio() {
             }`}
           >
             {device === 'mobile' ? (
-              // Phone: a bezel around a screen exactly the engine's viewport wide,
-              // with the app's name where its title bar would be.
-              <div
-                style={{ width: DEVICE_VIEWPORT.mobile + 2 * PHONE_BEZEL, padding: PHONE_BEZEL }}
-                className={`mx-auto flex min-h-0 flex-1 flex-col rounded-[40px] bg-zinc-900 ${
-                  previewScheme === 'dark' ? 'ring-1 ring-white/15' : ''
-                }`}
+              <PhoneFrame
+                app={shortName(active)}
+                platform={platformOf(active)}
+                dark={previewScheme === 'dark'}
               >
-                <div
-                  className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-[30px] ${
-                    previewScheme === 'dark' ? 'bg-black' : 'bg-white'
-                  }`}
-                >
-                  <div
-                    className={`flex h-9 shrink-0 items-center justify-center gap-1.5 border-b text-[11px] ${
-                      previewScheme === 'dark'
-                        ? 'border-white/10 text-white/85'
-                        : 'border-black/5 text-(--fg)'
-                    }`}
-                  >
-                    <span className="font-medium">{shortName(active)}</span>
-                    <span className="opacity-60">{platformOf(active)}</span>
-                  </div>
-                  {previewBody}
-                </div>
-              </div>
+                {previewBody}
+              </PhoneFrame>
             ) : (
               <div
                 style={{ maxWidth: DESKTOP_PREVIEW_WIDTH }}
