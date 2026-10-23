@@ -128,3 +128,47 @@ describe('quirks: Gmail 102KB clipping', () => {
     expect(html).not.toContain('[Message clipped]');
   });
 });
+
+describe('quirks: fixed widths wider than a phone', () => {
+  const PHONE = { colorScheme: 'light' as const, viewportWidth: 375 };
+  const fit = (html: string, client: Parameters<typeof simulate>[1] = 'gmail-mobile') =>
+    byFeature(simulate(html, client, PHONE).mutations, 'quirk-mobile-fixed-width');
+
+  it('flags a 600px table with no mobile rule', () => {
+    const m = fit('<table width="600"><tr><td>x</td></tr></table>');
+    expect(m).toHaveLength(1);
+    expect(m[0].severity).toBe('warning');
+  });
+
+  it('accepts a mobile rule that resizes it', () => {
+    const html = `<style>@media (max-width:600px){ .c { width:100% !important; } }</style>
+      <table class="c" width="600"><tr><td>x</td></tr></table>`;
+    expect(fit(html)).toHaveLength(0);
+  });
+
+  it('ignores a rule that does not apply at phone width', () => {
+    const html = `<style>@media (min-width:601px){ .c { width:100% !important; } }</style>
+      <table class="c" width="600"><tr><td>x</td></tr></table>`;
+    expect(fit(html)).toHaveLength(1);
+  });
+
+  it('needs !important to override an inline width', () => {
+    const rule = (imp: string) => `<style>@media (max-width:600px){ .c { width:100%${imp}; } }</style>
+      <div class="c" style="width:600px">x</div>`;
+    expect(fit(rule(''))).toHaveLength(1);
+    expect(fit(rule(' !important'))).toHaveLength(0);
+  });
+
+  it('accepts fluid widths and inline max-width', () => {
+    expect(fit('<table width="100%"><tr><td>x</td></tr></table>')).toHaveLength(0);
+    expect(fit('<img src="a.png" width="600" style="max-width:100%">')).toHaveLength(0);
+  });
+
+  it('reports only the outermost overflowing element', () => {
+    expect(fit('<table width="600"><tr><td width="560">x</td></tr></table>')).toHaveLength(1);
+  });
+
+  it('does not run for desktop clients', () => {
+    expect(fit('<table width="600"><tr><td>x</td></tr></table>', 'gmail')).toHaveLength(0);
+  });
+});

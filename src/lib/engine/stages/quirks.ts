@@ -5,8 +5,10 @@
 //     percentage widths differently, and drops margin on block elements.
 //   - Gmail: clips messages larger than ~102 KB and shows a "[Message clipped]"
 //     notice. Handled after serialization (it is a raw byte-level cut).
+//   - Phones: fixed widths wider than the screen (mobile-fit.ts).
 import type { Mutation } from '../types';
 import type { StageContext } from './context';
+import { checkMobileFit } from './mobile-fit';
 
 const GMAIL_CLIP_DOC =
   'https://github.com/hteumeuleu/email-bugs/issues/41'; // documents Gmail's 102KB clipping
@@ -109,6 +111,8 @@ export function runQuirks(ctx: StageContext): void {
       }
     }
   }
+
+  checkMobileFit(ctx);
 }
 
 /**

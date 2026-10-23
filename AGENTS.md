@@ -11,8 +11,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # Mail Check
 
 Simulates how Gmail, Outlook (Windows), Outlook.com, Apple Mail and Yahoo
-render an email's HTML, and lists every change a client makes with the reason
-and an evidence link.
+render an email's HTML on desktop, and how the Gmail, Outlook, Apple Mail and
+Yahoo apps render it on a phone, and lists every change a client makes with
+the reason and an evidence link.
 
 ## Commands
 
@@ -39,10 +40,13 @@ pnpm update-caniemail   # refresh src/lib/engine/data/caniemail.json
      unsupported CSS per Can I Email
   4. `stages/defaults.ts` — inject the client's UA stylesheet
   5. `stages/dark-mode.ts` — color-scheme hint, dark-mode simulation
-  6. `stages/quirks.ts` — Word engine quirks, Gmail 102 KB clipping
+  6. `stages/quirks.ts` — Word engine quirks, Gmail 102 KB clipping, and
+     (`mobile-fit.ts`) fixed widths wider than a phone screen
 - Support decisions come from the Can I Email snapshot (`supportFor` in
   `data/snapshot.ts`); profiles only hold what Can I Email does not track.
-- `src/lib/engine/profiles/` — one file per client: quirks and dark-mode strategy.
+- `src/lib/engine/profiles/` — one file per client: device, quirks and dark-mode
+  strategy. `CLIENTS_BY_DEVICE` and `clientOn` map clients between desktop
+  and phone. Phone clients' snapshot entries are the worse of iOS and Android.
 - `src/lib/engine/data/` — committed Can I Email snapshot plus `slug-map.ts`,
   which maps feature slugs to CSS properties, values, functions and units.
 
