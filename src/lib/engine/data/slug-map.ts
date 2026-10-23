@@ -143,11 +143,20 @@ const FUNCTION_LEVEL: FunctionMapping[] = [
   { kind: 'function', slug: 'css-rgb', functions: ['rgb'] },
   { kind: 'function', slug: 'css-rgba', functions: ['rgba'] },
   { kind: 'function', slug: 'css-modern-color', functions: ['oklch', 'oklab', 'lab', 'lch', 'hwb', 'color'] },
+  { kind: 'function', slug: 'css-variables', functions: ['var'] },
 ];
+
+// Matched in css-filter from the declaration itself rather than a mapping:
+// the `!important` flag, and `--name:` custom property declarations.
+export const IMPORTANT_SLUG = 'css-important';
+export const CUSTOM_PROPERTY_SLUG = 'css-variables';
 
 // --- Hand-curated keyword-level entries --------------------------------------
 const KEYWORD_LEVEL: KeywordMapping[] = [
   { kind: 'keyword', slug: 'css-intrinsic-size', keywords: ['fit-content', 'min-content', 'max-content'] },
+  // caniemail's spelling of system-ui.
+  { kind: 'keyword', slug: 'css-sytem-ui', keywords: ['system-ui', 'ui-serif', 'ui-sans-serif', 'ui-rounded', 'ui-monospace'] },
+  { kind: 'keyword', slug: 'css-unit-initial', keywords: ['initial'] },
 ];
 
 // --- Hand-curated unit-level entries -----------------------------------------
@@ -180,13 +189,9 @@ const SKIP_PREFIXES = [
   'css-at-',
 ];
 const SKIP_EXACT = new Set([
-  'css-important', // handled as a special flag, not a property
   'css-comments',
   'css-nesting',
-  'css-variables',
-  'css-sytem-ui', // caniemail's spelling of system-ui keyword
   'css-inert-attribute', // HTML attribute, not a CSS property
-  'css-unit-initial', // the `initial` keyword, not a property/unit
 ]);
 
 interface BuiltSlugMap {
@@ -213,7 +218,7 @@ function build(): BuiltSlugMap {
       props.map((property): PropertyMapping => ({ kind: 'property', slug, property })),
     ),
   ];
-  const curatedSlugs = new Set(curated.map((m) => m.slug));
+  const curatedSlugs = new Set([...curated.map((m) => m.slug), IMPORTANT_SLUG]);
 
   const mappings: SlugMapping[] = [...curated];
   const unmapped: string[] = [];

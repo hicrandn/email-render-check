@@ -7,10 +7,17 @@
 //
 // Value-level matches only affect that value: `display:flex` is removed for
 // outlook-win, but `display:block` is untouched.
+import { list } from 'postcss';
 import valueParser from 'postcss-value-parser';
 import type { ClientId, Mutation, MutationAction, Severity } from '../types';
 import { featureBySlug } from '../data/snapshot';
-import { SLUG_MAP, type SlugMapping } from '../data/slug-map';
+import {
+  SLUG_MAP,
+  CUSTOM_PROPERTY_SLUG,
+  IMPORTANT_SLUG,
+  type KeywordMapping,
+  type SlugMapping,
+} from '../data/slug-map';
 import { removeTokenFromDecl, type ParsedDeclaration } from '../parse/css';
 import type { StageContext } from './context';
 
@@ -42,7 +49,7 @@ function analyzeValue(value: string): ValueAnalysis {
 interface Match {
   slug: string;
   /** How to act if the slug is unsupported. */
-  kind: SlugMapping['kind'];
+  kind: SlugMapping['kind'] | 'important';
 }
 
 function findMatches(decl: ParsedDeclaration, analysis: ValueAnalysis): Match[] {
@@ -82,6 +89,9 @@ function findMatches(decl: ParsedDeclaration, analysis: ValueAnalysis): Match[] 
   for (const m of SLUG_MAP.byProperty.get(decl.prop) ?? []) {
     if (!shorthandSlugs.has(m.slug)) matches.push({ slug: m.slug, kind: 'property' });
   }
+  if (decl.prop.startsWith('--')) matches.push({ slug: CUSTOM_PROPERTY_SLUG, kind: 'property' });
+  // Expanded longhands share their shorthand's flag; report it once.
+  if (decl.important && !decl.expandedFrom) matches.push({ slug: IMPORTANT_SLUG, kind: 'important' });
 
   return matches;
 }
@@ -158,6 +168,26 @@ function applyRemoval(
         removalReason(ctx, feature, support.notes, decl)),
     );
     return;
+  }
+
+  // An unsupported family in a font-family list: drop just that family, the
+  // client falls through to the next one.
+  if (match.kind === 'keyword' && decl.prop === 'font-family' && !decl.expandedFrom) {
+    const { keywords } = SLUG_MAP.bySlug.get(match.slug) as KeywordMapping;
+    const families = list.comma(decl.value);
+    const kept = families.filter((f) => !keywords.includes(f.toLowerCase()));
+    if (kept.length > 0 && kept.length < families.length) {
+      const dropped = families.filter((f) => !kept.includes(f));
+      decl.decl.value = kept.join(', ');
+      sheet.dirty = true;
+      ctx.mutations.push(
+        buildMutation(ctx.clientId, decl, match, feature, 'remove-value', 'error',
+          `${ctx.profile.name} does not support ${feature.title}. \`${dropped.join(', ')}\` was ` +
+            `removed from \`font-family\`, so the next family in the list is used.` +
+            notes(support.notes)),
+      );
+      return;
+    }
   }
 
   // Whole-declaration removal (property-level, or a value that is the whole value).

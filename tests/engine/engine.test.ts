@@ -195,3 +195,39 @@ describe('css-filter: longhands, logical properties and keywords', () => {
     expect(byFeature(mutations, 'css-intrinsic-size')[0].action).toBe('remove-value');
   });
 });
+
+describe('css-filter: variables, !important and keywords', () => {
+  const vars = '<style>:root{--brand:#ff0000}.a{color:var(--brand)}</style><p class="a">x</p>';
+
+  it('removes custom properties and var() for gmail', () => {
+    const { html: out, mutations } = simulate(vars, 'gmail');
+    expect(byFeature(mutations, 'css-variables')).toHaveLength(2);
+    expect(out).not.toContain('--brand');
+  });
+
+  it('keeps them for apple-mail', () => {
+    const { html: out } = simulate(vars, 'apple-mail');
+    expect(out).toContain('var(--brand)');
+  });
+
+  it('warns once on !important (partial in gmail), even on a shorthand', () => {
+    const { mutations } = simulate('<p style="margin:0 !important">x</p>', 'gmail');
+    const m = byFeature(mutations, 'css-important');
+    expect(m).toHaveLength(1);
+    expect(m[0].action).toBe('warn-only');
+  });
+
+  it('drops only system-ui from a font stack in outlook-win', () => {
+    const { html: out, mutations } = simulate(
+      '<p style="font-family:system-ui, Arial, sans-serif">x</p>',
+      'outlook-win',
+    );
+    expect(byFeature(mutations, 'css-sytem-ui')[0].action).toBe('remove-value');
+    expect(out).toContain('font-family:Arial, sans-serif');
+  });
+
+  it('removes the initial keyword for yahoo', () => {
+    const { html: out } = simulate('<p style="color:initial">x</p>', 'yahoo');
+    expect(out).not.toContain('initial');
+  });
+});
