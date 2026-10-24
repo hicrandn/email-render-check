@@ -155,6 +155,8 @@ type PreviewScheme = 'light' | 'dark';
 // Engine viewport width per device. On desktop the preview column is a little
 // wider than the email; on a phone it is the phone frame's screen.
 const DEVICE_VIEWPORT: Record<Device, number> = { desktop: 600, mobile: PHONE_SCREEN.width };
+// Fixed, not shrink-to-fit: a narrower frame would trip the email's mobile
+// @media rules in a desktop client. A narrow pane scrolls sideways instead.
 const DESKTOP_PREVIEW_WIDTH = 680;
 
 /** "iOS/Android app" from "Gmail (iOS/Android app)". */
@@ -607,8 +609,8 @@ export default function Studio() {
               </PhoneFrame>
             ) : (
               <div
-                style={{ maxWidth: DESKTOP_PREVIEW_WIDTH }}
-                className={`mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-md border ${
+                style={{ width: DESKTOP_PREVIEW_WIDTH }}
+                className={`mx-auto flex min-h-0 shrink-0 flex-1 flex-col overflow-hidden rounded-md border ${
                   previewScheme === 'dark' ? 'border-white/10' : 'border-(--border)'
                 }`}
               >
