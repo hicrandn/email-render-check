@@ -561,11 +561,6 @@ export default function Studio() {
             })}
             </div>
 
-            {alwaysLight && (
-              <span className="shrink-0 self-center text-[11px] text-(--fg-muted)">
-                {shortName(active)} keeps the light design
-              </span>
-            )}
             <div className="flex shrink-0 items-center gap-1.5 py-1.5">
               <Segmented
                 value={device}
@@ -599,6 +594,11 @@ export default function Studio() {
               previewScheme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-(--preview-bg)'
             }`}
           >
+            {alwaysLight && (
+              <p className="mb-2 shrink-0 text-center text-[11px] text-white/60">
+                {shortName(active)} leaves email colors alone in dark mode: this is what readers see.
+              </p>
+            )}
             {device === 'mobile' ? (
               <PhoneFrame
                 app={shortName(active)}
